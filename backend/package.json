@@ -7,11 +7,11 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@google/genai": "^0.1.1",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "mongoose": "^8.4.0",
-    "pdfkit": "^0.15.0"
+    "@google/genai": "^2.8.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "mongoose": "^8.24.0",
+    "pdfkit": "^0.15.2"
   }
 }
