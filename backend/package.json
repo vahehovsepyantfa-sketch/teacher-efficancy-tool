@@ -1,0 +1,19 @@
+{
+  "name": "teacher-efficancy-tool-backend",
+  "version": "1.0.0",
+  "description": "Backend for Teacher Efficancy Tool",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.8.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.24.0",
+    "pdfkit": "^0.15.2"
+  }
+}
