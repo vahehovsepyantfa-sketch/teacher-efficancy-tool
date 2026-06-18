@@ -17,7 +17,19 @@ const getProfile = async (req, res) => {
  */
 const createReflection = async (req, res) => {
   try {
-    const { content, moodRating, inputMethod, date } = req.body;
+    const {
+      content,
+      moodRating,
+      inputMethod,
+      date,
+      lessonPlanLink,
+      recordingLink,
+      subject,
+      grade,
+      studentsCount,
+      successfulDirections,
+      previousGoalsProgress,
+    } = req.body;
 
     if (!content) {
       return res.status(400).json({ message: 'content is required' });
@@ -29,6 +41,13 @@ const createReflection = async (req, res) => {
       moodRating,
       inputMethod: inputMethod === 'voice' ? 'voice' : 'text',
       date: date || Date.now(),
+      lessonPlanLink,
+      recordingLink,
+      subject,
+      grade,
+      studentsCount,
+      successfulDirections,
+      previousGoalsProgress,
     });
 
     res.status(201).json({ reflection });

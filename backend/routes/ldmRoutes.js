@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   listMyTeachers,
+  getTeacherReflections,
   createObservation,
   listObservations,
   getObservationPdf,
@@ -20,6 +21,7 @@ const router = express.Router();
 router.use(protect, allowRoles('ldm', 'admin'));
 
 router.get('/teachers', listMyTeachers);
+router.get('/teachers/:id/reflections', getTeacherReflections);
 
 router.post('/observations', createObservation);
 router.get('/observations', listObservations);

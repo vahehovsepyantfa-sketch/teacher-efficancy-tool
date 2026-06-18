@@ -1,8 +1,14 @@
 const TeacherReflection = require('../models/TeacherReflection');
 const LessonObservation = require('../models/LessonObservation');
 const DailyNote = require('../models/DailyNote');
+const Manifestation = require('../models/Manifestation');
 const User = require('../models/User');
-const { generateReflectionFeedback, generateDiarySummary } = require('../services/geminiAiService');
+const {
+  generateReflectionFeedback,
+  generateDiarySummary,
+  classifyManifestation: classifyManifestationAi,
+} = require('../services/geminiAiService');
+const { buildCategorizedMatrix } = require('../utils/competencyFramework');
 
 /**
  * POST /api/ai/reflections/:id/feedback
@@ -102,8 +108,90 @@ const listTeacherDiary = async (req, res) => {
   res.json({ entries });
 };
 
+const assertCanAccessTeacher = async (req, teacherId) => {
+  if (req.user.role === 'admin') return true;
+  const teacher = await User.findOne({ _id: teacherId, assignedLdm: req.user._id, role: 'teacher' });
+  return !!teacher;
+};
+
+/**
+ * POST /api/ai/manifestations
+ * Body: { teacher, period, text }
+ * The chat-style sorter: one typed "manifestation" (observed behavior) is
+ * classified by Gemini into one of the 18 fixed leadership competencies
+ * and saved, so it can be shown "sitting" inside that competency's bucket.
+ */
+const classifyManifestation = async (req, res) => {
+  try {
+    const { teacher, period, text } = req.body;
+
+    if (!teacher || !text) {
+      return res.status(400).json({ message: 'teacher and text are required' });
+    }
+
+    const allowed = await assertCanAccessTeacher(req, teacher);
+    if (!allowed) {
+      return res.status(403).json({ message: 'This teacher is not assigned to you' });
+    }
+
+    const result = await classifyManifestationAi(text);
+
+    const manifestation = await Manifestation.create({
+      author: req.user._id,
+      teacher,
+      period: period || '',
+      text,
+      competency: result.competency,
+      categoryKey: result.category?.key || null,
+      categoryName: result.category?.name || null,
+      confidence: result.confidence,
+      aiNote: result.note,
+    });
+
+    res.status(201).json({ manifestation });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to classify manifestation', error: err.message });
+  }
+};
+
+/**
+ * GET /api/ai/manifestations?teacher=<id>&period=<string>
+ * All classified manifestations for a teacher (optionally one period),
+ * both as a flat chat history and grouped into the 5-category / 18-row
+ * framework so the UI can render them "sitting" in their competencies.
+ */
+const listManifestations = async (req, res) => {
+  if (!req.query.teacher) {
+    return res.status(400).json({ message: 'teacher query param is required' });
+  }
+
+  const allowed = await assertCanAccessTeacher(req, req.query.teacher);
+  if (!allowed) {
+    return res.status(403).json({ message: 'This teacher is not assigned to you' });
+  }
+
+  const filter = { teacher: req.query.teacher };
+  if (req.query.period) filter.period = req.query.period;
+
+  const manifestations = await Manifestation.find(filter).sort({ createdAt: 1 });
+
+  const grouped = buildCategorizedMatrix([]);
+  grouped.categories.forEach((cat) => {
+    cat.rows.forEach((row) => {
+      row.manifestations = manifestations
+        .filter((m) => m.competency === row.name)
+        .map((m) => ({ id: m._id, text: m.text, confidence: m.confidence, createdAt: m.createdAt }));
+    });
+  });
+  const uncategorized = manifestations.filter((m) => !m.competency);
+
+  res.json({ manifestations, grouped, uncategorized });
+};
+
 module.exports = {
   generateFeedbackForReflection,
   generateTeacherDiary,
   listTeacherDiary,
+  classifyManifestation,
+  listManifestations,
 };

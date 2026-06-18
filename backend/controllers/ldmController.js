@@ -1,8 +1,10 @@
 const LessonObservation = require('../models/LessonObservation');
 const CompetencyEvaluation = require('../models/CompetencyEvaluation');
 const DailyNote = require('../models/DailyNote');
+const TeacherReflection = require('../models/TeacherReflection');
 const User = require('../models/User');
-const { computeEntriesAverage, buildCompetencyMatrix } = require('../utils/mathCalculations');
+const { computeEntriesAverage } = require('../utils/mathCalculations');
+const { buildCategorizedMatrix, ALL_COMPETENCIES } = require('../utils/competencyFramework');
 const { generateObservationPdf, generateEvaluationPdf } = require('../services/pdfGeneratorService');
 
 /**
@@ -12,10 +14,34 @@ const { generateObservationPdf, generateEvaluationPdf } = require('../services/p
  * is for the LDM's own roster.
  */
 const listMyTeachers = async (req, res) => {
-  const teachers = await User.find({ assignedLdm: req.user._id, role: 'teacher' }).select(
-    'name email school region createdAt'
-  );
+  const filter = req.user.role === 'admin' ? { role: 'teacher' } : { assignedLdm: req.user._id, role: 'teacher' };
+  const teachers = await User.find(filter).select('name email school region createdAt');
   res.json({ teachers });
+};
+
+/**
+ * Confirms the given teacher is in this LDM's roster (row-level security
+ * per spec: each LDM only ever sees the 10-12 teachers Admin assigned to
+ * them). Admins bypass this check.
+ */
+const assertCanAccessTeacher = async (req, teacherId) => {
+  if (req.user.role === 'admin') return true;
+  const teacher = await User.findOne({ _id: teacherId, assignedLdm: req.user._id, role: 'teacher' });
+  return !!teacher;
+};
+
+/**
+ * GET /api/ldm/teachers/:id/reflections
+ * A specific assigned teacher's self-reflections, so the specialist can
+ * review the teacher's self-analysis before scoring the lesson plan.
+ */
+const getTeacherReflections = async (req, res) => {
+  const allowed = await assertCanAccessTeacher(req, req.params.id);
+  if (!allowed) {
+    return res.status(403).json({ message: 'This teacher is not assigned to you' });
+  }
+  const reflections = await TeacherReflection.find({ teacher: req.params.id }).sort({ date: -1 });
+  res.json({ reflections });
 };
 
 /**
@@ -23,13 +49,28 @@ const listMyTeachers = async (req, res) => {
  */
 const createObservation = async (req, res) => {
   try {
-    const { teacher, date, subject, grade, strengths, areasForGrowth, competencyScores, recommendations } =
-      req.body;
+    const {
+      teacher,
+      date,
+      subject,
+      grade,
+      lessonPlanLink,
+      recordingLink,
+      strengths,
+      areasForGrowth,
+      competencyScores,
+      recommendations,
+    } = req.body;
 
     if (!teacher || !Array.isArray(competencyScores) || competencyScores.length === 0) {
       return res
         .status(400)
         .json({ message: 'teacher and at least one competencyScores entry are required' });
+    }
+
+    const allowed = await assertCanAccessTeacher(req, teacher);
+    if (!allowed) {
+      return res.status(403).json({ message: 'This teacher is not assigned to you' });
     }
 
     const overallScore = computeEntriesAverage(competencyScores);
@@ -40,6 +81,8 @@ const createObservation = async (req, res) => {
       date: date || Date.now(),
       subject,
       grade,
+      lessonPlanLink,
+      recordingLink,
       strengths,
       areasForGrowth,
       competencyScores,
@@ -57,7 +100,7 @@ const createObservation = async (req, res) => {
  * GET /api/ldm/observations?teacher=<id>
  */
 const listObservations = async (req, res) => {
-  const filter = { ldm: req.user._id };
+  const filter = req.user.role === 'admin' ? {} : { ldm: req.user._id };
   if (req.query.teacher) filter.teacher = req.query.teacher;
 
   const observations = await LessonObservation.find(filter)
@@ -89,10 +132,13 @@ const getObservationPdf = async (req, res) => {
 
 /**
  * POST /api/ldm/evaluations
+ * `competencies` should ideally cover all 18 framework competencies (see
+ * utils/competencyFramework.ALL_COMPETENCIES) so categoryAverages and the
+ * overall average are meaningful, but partial submissions are accepted.
  */
 const createEvaluation = async (req, res) => {
   try {
-    const { teacher, period, competencies } = req.body;
+    const { teacher, period, competencies, source } = req.body;
 
     if (!teacher || !period || !Array.isArray(competencies) || competencies.length === 0) {
       return res
@@ -100,14 +146,22 @@ const createEvaluation = async (req, res) => {
         .json({ message: 'teacher, period and at least one competency score are required' });
     }
 
-    const averageScore = computeEntriesAverage(competencies);
+    const allowed = await assertCanAccessTeacher(req, teacher);
+    if (!allowed) {
+      return res.status(403).json({ message: 'This teacher is not assigned to you' });
+    }
+
+    const { categories, overallAverage } = buildCategorizedMatrix(competencies);
+    const categoryAverages = categories.map((c) => ({ key: c.key, name: c.name, average: c.categoryAverage }));
 
     const evaluation = await CompetencyEvaluation.create({
       teacher,
       evaluator: req.user._id,
       period,
       competencies,
-      averageScore,
+      categoryAverages,
+      averageScore: overallAverage,
+      source: source === 'ai-chat' ? 'ai-chat' : 'manual',
     });
 
     res.status(201).json({ evaluation });
@@ -120,7 +174,7 @@ const createEvaluation = async (req, res) => {
  * GET /api/ldm/evaluations?teacher=<id>
  */
 const listEvaluations = async (req, res) => {
-  const filter = { evaluator: req.user._id };
+  const filter = req.user.role === 'admin' ? {} : { evaluator: req.user._id };
   if (req.query.teacher) filter.teacher = req.query.teacher;
 
   const evaluations = await CompetencyEvaluation.find(filter)
@@ -132,18 +186,21 @@ const listEvaluations = async (req, res) => {
 
 /**
  * GET /api/ldm/evaluations/matrix?teacher=<id>
- * Aggregated competency averages + trend for the CompetencyMatrix view.
+ * The most recent evaluation's full 18-competency / 5-category breakdown,
+ * for the live CompetencyMatrix view, plus the blank framework so the UI
+ * can render all 18 rows even with zero evaluations yet.
  */
 const getCompetencyMatrix = async (req, res) => {
   if (!req.query.teacher) {
     return res.status(400).json({ message: 'teacher query param is required' });
   }
 
-  const evaluations = await CompetencyEvaluation.find({ teacher: req.query.teacher }).sort({
-    createdAt: 1,
+  const latest = await CompetencyEvaluation.findOne({ teacher: req.query.teacher }).sort({
+    createdAt: -1,
   });
 
-  res.json({ matrix: buildCompetencyMatrix(evaluations) });
+  const matrix = buildCategorizedMatrix(latest ? latest.competencies : []);
+  res.json({ matrix, latestEvaluationId: latest?._id || null, period: latest?.period || null });
 };
 
 /**
@@ -168,7 +225,8 @@ const getEvaluationPdf = async (req, res) => {
 
 /**
  * POST /api/ldm/notes
- * Quick manual/voice note about a teacher, feeds the AI Diary.
+ * Quick manual/voice note about a teacher — also used as one "message" in
+ * the manifestation-sorting chat (see aiController.classifyManifestation).
  */
 const createNote = async (req, res) => {
   try {
@@ -196,7 +254,7 @@ const createNote = async (req, res) => {
  * GET /api/ldm/notes?teacher=<id>
  */
 const listNotes = async (req, res) => {
-  const filter = { author: req.user._id };
+  const filter = req.user.role === 'admin' ? {} : { author: req.user._id };
   if (req.query.teacher) filter.teacher = req.query.teacher;
 
   const notes = await DailyNote.find(filter).sort({ date: -1 });
@@ -205,6 +263,7 @@ const listNotes = async (req, res) => {
 
 module.exports = {
   listMyTeachers,
+  getTeacherReflections,
   createObservation,
   listObservations,
   getObservationPdf,

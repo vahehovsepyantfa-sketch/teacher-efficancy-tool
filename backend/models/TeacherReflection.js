@@ -23,13 +23,23 @@ const teacherReflectionSchema = new mongoose.Schema(
       enum: ['text', 'voice'],
       default: 'text',
     },
-    // 1-5 self-rating of how the day/lesson went.
+    // Official spec scale: 0-5 self-rating of how the day/lesson went.
     moodRating: {
       type: Number,
-      min: 1,
+      min: 0,
       max: 5,
       default: null,
     },
+    // Required links per spec Module 1 ("Դասի պլանի հղում" / "Դասի ձայնագրության հղում").
+    lessonPlanLink: { type: String, trim: true, default: '' },
+    recordingLink: { type: String, trim: true, default: '' },
+    subject: { type: String, trim: true, default: '' },
+    grade: { type: String, trim: true, default: '' },
+    studentsCount: { type: Number, default: null },
+    // "What worked well" / "progress on previous goals" — spec's named
+    // reflection prompts, each fillable via voice-to-text.
+    successfulDirections: { type: String, trim: true, default: '' },
+    previousGoalsProgress: { type: String, trim: true, default: '' },
     // AI-generated coaching feedback for this reflection (see aiController).
     aiFeedback: {
       type: String,
