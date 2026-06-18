@@ -5,12 +5,13 @@ const getRecognitionClass = () =>
 
 /**
  * Records speech via the browser's Web Speech API and appends the
- * transcript through `onTranscript`. Degrades gracefully (disabled button
- * with a note) in browsers that don't support SpeechRecognition, e.g. Firefox.
+ * transcript through `onTranscript`. Defaults to Armenian (hy-AM).
+ * Degrades gracefully (a note instead of a button) in browsers that
+ * don't support SpeechRecognition, e.g. Firefox.
  *
  * Usage: <VoiceToTextButton onTranscript={(text) => setContent((c) => `${c} ${text}`)} />
  */
-export default function VoiceToTextButton({ onTranscript, lang = 'en-US' }) {
+export default function VoiceToTextButton({ onTranscript, lang = 'hy-AM' }) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const recognitionRef = useRef(null);
@@ -18,7 +19,7 @@ export default function VoiceToTextButton({ onTranscript, lang = 'en-US' }) {
   const SpeechRecognitionClass = getRecognitionClass();
 
   if (!SpeechRecognitionClass) {
-    return <span className="muted">Voice input isn&apos;t supported in this browser.</span>;
+    return <span className="muted">Ձայնային մուտքագրումը այս դիտարկիչում հասանելի չէ։</span>;
   }
 
   const startListening = () => {
@@ -36,7 +37,7 @@ export default function VoiceToTextButton({ onTranscript, lang = 'en-US' }) {
     };
 
     recognition.onerror = (event) => {
-      setError(`Voice input error: ${event.error}`);
+      setError(`Ձայնագրման սխալ՝ ${event.error}`);
       setListening(false);
     };
 
@@ -59,7 +60,7 @@ export default function VoiceToTextButton({ onTranscript, lang = 'en-US' }) {
         className="secondary"
         onClick={listening ? stopListening : startListening}
       >
-        {listening ? '⏹ Stop recording' : '🎤 Speak'}
+        {listening ? '⏹ Կանգնեցնել ձայնագրումը' : '🎤 Խոսել'}
       </button>
       {error && <span className="error-text"> {error}</span>}
     </span>

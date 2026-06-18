@@ -16,7 +16,7 @@ export default function AiDiary() {
     axiosClient
       .get('/ldm/teachers')
       .then(({ data }) => setTeachers(data.teachers))
-      .catch(() => setError('Failed to load teachers'));
+      .catch(() => setError('Չհաջողվեց բեռնել ուսուցիչների ցանկը'));
   }, []);
 
   const loadDiary = async (id) => {
@@ -29,7 +29,7 @@ export default function AiDiary() {
   };
 
   useEffect(() => {
-    loadDiary(teacherId).catch(() => setError('Failed to load diary'));
+    loadDiary(teacherId).catch(() => setError('Չհաջողվեց բեռնել օրագիրը'));
   }, [teacherId]);
 
   const handleGenerate = async () => {
@@ -40,7 +40,7 @@ export default function AiDiary() {
       await axiosClient.post('/ai/diary', { teacher: teacherId, days });
       await loadDiary(teacherId);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to generate diary entry');
+      setError(err.response?.data?.message || 'Չհաջողվեց ստեղծել օրագրի գրառում');
     } finally {
       setGenerating(false);
     }
@@ -54,7 +54,7 @@ export default function AiDiary() {
       await axiosClient.post('/ldm/notes', { teacher: teacherId, note });
       setNote('');
     } catch {
-      setError('Failed to save note');
+      setError('Չհաջողվեց պահպանել գրառումը');
     } finally {
       setSavingNote(false);
     }
@@ -63,11 +63,11 @@ export default function AiDiary() {
   return (
     <div>
       <div className="card">
-        <h2>AI Diary</h2>
+        <h2>AI օրագիր</h2>
         <label>
-          <span>Teacher</span>
+          <span>Ուսուցիչ</span>
           <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-            <option value="">Select a teacher…</option>
+            <option value="">Ընտրեք ուսուցչին...</option>
             {teachers.map((t) => (
               <option key={t._id} value={t._id}>
                 {t.name}
@@ -79,7 +79,7 @@ export default function AiDiary() {
         {teacherId && (
           <>
             <label>
-              <span>Look back over the last (days)</span>
+              <span>Վերլուծել վերջին (օրեր)</span>
               <input
                 type="number"
                 min={1}
@@ -90,7 +90,7 @@ export default function AiDiary() {
             </label>
             {error && <p className="error-text">{error}</p>}
             <button type="button" onClick={handleGenerate} disabled={generating}>
-              {generating ? 'Generating…' : 'Generate AI diary entry'}
+              {generating ? 'Ստեղծվում է...' : 'Ստեղծել AI օրագրի գրառում'}
             </button>
           </>
         )}
@@ -98,15 +98,15 @@ export default function AiDiary() {
 
       {teacherId && (
         <div className="card">
-          <h3>Quick note about this teacher</h3>
-          <p className="muted">Notes you add here feed into future AI diary summaries.</p>
+          <h3>Արագ գրառում այս ուսուցչի մասին</h3>
+          <p className="muted">Այստեղ ավելացված գրառումները կօգտագործվեն հետագա AI օրագրի ամփոփումներում։</p>
           <form onSubmit={handleAddNote}>
             <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
             <div style={{ margin: '0.6rem 0' }}>
               <VoiceToTextButton onTranscript={(text) => setNote((n) => (n ? `${n} ${text}` : text))} />
             </div>
             <button type="submit" disabled={savingNote || !note.trim()}>
-              {savingNote ? 'Saving…' : 'Add note'}
+              {savingNote ? 'Պահպանվում է...' : 'Ավելացնել գրառում'}
             </button>
           </form>
         </div>
@@ -114,11 +114,11 @@ export default function AiDiary() {
 
       {teacherId && (
         <div className="card">
-          <h3>Diary history</h3>
-          {entries.length === 0 && <p className="muted">No AI diary entries generated yet.</p>}
+          <h3>Օրագրի պատմություն</h3>
+          {entries.length === 0 && <p className="muted">Դեռևս AI օրագրի գրառում չկա։</p>}
           {entries.map((entry) => (
             <div key={entry._id} className="card" style={{ background: '#fafbfc' }}>
-              <p className="muted">{new Date(entry.date).toLocaleString()}</p>
+              <p className="muted">{new Date(entry.date).toLocaleString('hy-AM')}</p>
               <p>{entry.note}</p>
             </div>
           ))}

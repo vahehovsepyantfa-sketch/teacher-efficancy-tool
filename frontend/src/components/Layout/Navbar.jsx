@@ -2,19 +2,23 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const LINKS_BY_ROLE = {
-  teacher: [{ to: '/', label: 'My Reflections' }],
+  teacher: [{ to: '/teacher', label: 'Իմ ինքնավերլուծությունը' }],
   ldm: [
-    { to: '/', label: 'Observations' },
-    { to: '/ldm/competency', label: 'Competency Matrix' },
-    { to: '/ldm/ai-diary', label: 'AI Diary' },
+    { to: '/ldm/observations', label: 'Դասի գնահատում' },
+    { to: '/ldm/competency', label: 'Կարողունակությունների մատրիցա' },
+    { to: '/ldm/chat', label: 'Դրսևորումների չատ (AI)' },
+    { to: '/ldm/ai-diary', label: 'AI օրագիր' },
   ],
   admin: [
-    { to: '/', label: 'Observations' },
-    { to: '/ldm/competency', label: 'Competency Matrix' },
-    { to: '/ldm/ai-diary', label: 'AI Diary' },
-    { to: '/admin/users', label: 'User Management' },
+    { to: '/ldm/observations', label: 'Դասի գնահատում' },
+    { to: '/ldm/competency', label: 'Կարողունակությունների մատրիցա' },
+    { to: '/ldm/chat', label: 'Դրսևորումների չատ (AI)' },
+    { to: '/ldm/ai-diary', label: 'AI օրագիր' },
+    { to: '/admin/users', label: 'Օգտատերերի կառավարում' },
   ],
 };
+
+const ROLE_LABELS = { teacher: 'ուսուցիչ', ldm: 'մասնագետ', admin: 'ադմին' };
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -29,7 +33,9 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <div className="navbar-brand">Teacher Efficancy Tool</div>
+      <Link to="/dashboard" className="navbar-brand">
+        Ուսուցչի Զարգացման Հարթակ
+      </Link>
       <div className="navbar-links">
         {(LINKS_BY_ROLE[user.role] || []).map((link) => (
           <Link key={link.to} to={link.to}>
@@ -39,9 +45,9 @@ export default function Navbar() {
       </div>
       <div className="navbar-user">
         <span>
-          {user.name} <em>({user.role})</em>
+          {user.name} <em>({ROLE_LABELS[user.role] || user.role})</em>
         </span>
-        <button onClick={handleLogout}>Log out</button>
+        <button onClick={handleLogout}>Դուրս գալ</button>
       </div>
     </nav>
   );

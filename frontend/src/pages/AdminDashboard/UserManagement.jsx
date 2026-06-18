@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axiosClient from '../../api/axiosClient';
 
 const ROLES = ['teacher', 'ldm', 'admin'];
+const ROLE_LABELS = { teacher: 'Ուսուցիչ', ldm: 'ԱԶՂ մասնագետ', admin: 'Ադմինիստրատոր' };
 const emptyForm = { name: '', email: '', password: '', role: 'teacher', school: '', region: '' };
 
 export default function UserManagement() {
@@ -16,7 +17,7 @@ export default function UserManagement() {
   };
 
   useEffect(() => {
-    loadUsers().catch(() => setError('Failed to load users'));
+    loadUsers().catch(() => setError('Չհաջողվեց բեռնել օգտատերերի ցանկը'));
   }, []);
 
   const ldms = users.filter((u) => u.role === 'ldm');
@@ -30,7 +31,7 @@ export default function UserManagement() {
       setForm(emptyForm);
       await loadUsers();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create user');
+      setError(err.response?.data?.message || 'Չհաջողվեց ստեղծել օգտատեր');
     } finally {
       setLoading(false);
     }
@@ -41,7 +42,7 @@ export default function UserManagement() {
       await axiosClient.patch(`/admin/users/${id}`, patch);
       await loadUsers();
     } catch {
-      setError('Failed to update user');
+      setError('Չհաջողվեց թարմացնել օգտատերին');
     }
   };
 
@@ -50,21 +51,21 @@ export default function UserManagement() {
       await axiosClient.delete(`/admin/users/${id}`);
       await loadUsers();
     } catch {
-      setError('Failed to deactivate user');
+      setError('Չհաջողվեց ապաակտիվացնել օգտատերին');
     }
   };
 
   return (
     <div>
       <div className="card">
-        <h2>Create user</h2>
+        <h2>Նոր օգտատերի ստեղծում</h2>
         <form onSubmit={handleCreate}>
           <label>
-            <span>Name</span>
+            <span>Անուն</span>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </label>
           <label>
-            <span>Email</span>
+            <span>Էլ. փոստ</span>
             <input
               type="email"
               value={form.email}
@@ -73,7 +74,7 @@ export default function UserManagement() {
             />
           </label>
           <label>
-            <span>Temporary password</span>
+            <span>Ժամանակավոր գաղտնաբառ</span>
             <input
               type="password"
               minLength={6}
@@ -83,32 +84,32 @@ export default function UserManagement() {
             />
           </label>
           <label>
-            <span>Role</span>
+            <span>Դեր</span>
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {ROLE_LABELS[r]}
                 </option>
               ))}
             </select>
           </label>
           {error && <p className="error-text">{error}</p>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Creating…' : 'Create user'}
+            {loading ? 'Ստեղծվում է...' : 'Ստեղծել օգտատեր'}
           </button>
         </form>
       </div>
 
       <div className="card">
-        <h3>All users</h3>
+        <h3>Բոլոր օգտատերերը</h3>
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Assigned LDM</th>
-              <th>Status</th>
+              <th>Անուն</th>
+              <th>Էլ. փոստ</th>
+              <th>Դեր</th>
+              <th>Կցված ԱԶՂ մասնագետ</th>
+              <th>Կարգավիճակ</th>
               <th></th>
             </tr>
           </thead>
@@ -121,7 +122,7 @@ export default function UserManagement() {
                   <select value={u.role} onChange={(e) => updateUser(u._id, { role: e.target.value })}>
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
-                        {r}
+                        {ROLE_LABELS[r]}
                       </option>
                     ))}
                   </select>
@@ -132,7 +133,7 @@ export default function UserManagement() {
                       value={u.assignedLdm?._id || ''}
                       onChange={(e) => updateUser(u._id, { assignedLdm: e.target.value || null })}
                     >
-                      <option value="">Unassigned</option>
+                      <option value="">Չկցված</option>
                       {ldms.map((l) => (
                         <option key={l._id} value={l._id}>
                           {l.name}
@@ -143,11 +144,11 @@ export default function UserManagement() {
                     '—'
                   )}
                 </td>
-                <td>{u.isActive ? 'Active' : 'Deactivated'}</td>
+                <td>{u.isActive ? 'Ակտիվ' : 'Ապաակտիվացված'}</td>
                 <td>
                   {u.isActive && (
                     <button type="button" className="secondary" onClick={() => deactivateUser(u._id)}>
-                      Deactivate
+                      Ապաակտիվացնել
                     </button>
                   )}
                 </td>

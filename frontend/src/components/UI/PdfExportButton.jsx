@@ -7,7 +7,7 @@ import axiosClient from '../../api/axiosClient';
  *
  * Usage: <PdfExportButton endpoint={`/ldm/observations/${obs._id}/pdf`} filename="observation.pdf" />
  */
-export default function PdfExportButton({ endpoint, filename = 'export.pdf', label = 'Export PDF' }) {
+export default function PdfExportButton({ endpoint, filename = 'export.pdf', label = 'Ներբեռնել PDF' }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,7 +25,7 @@ export default function PdfExportButton({ endpoint, filename = 'export.pdf', lab
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Failed to export PDF');
+      setError('PDF արտահանումը ձախողվեց');
     } finally {
       setLoading(false);
     }
@@ -34,7 +34,7 @@ export default function PdfExportButton({ endpoint, filename = 'export.pdf', lab
   return (
     <span>
       <button type="button" className="secondary" onClick={handleClick} disabled={loading}>
-        {loading ? 'Exporting…' : label}
+        {loading ? 'Արտահանվում է...' : label}
       </button>
       {error && <span className="error-text"> {error}</span>}
     </span>

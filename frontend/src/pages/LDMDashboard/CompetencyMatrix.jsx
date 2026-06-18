@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import PdfExportButton from '../../components/UI/PdfExportButton';
+import { COMPETENCY_CATEGORIES, SCORE_SCALE } from '../../constants/competencyFramework';
 
-const emptyScoreRow = () => ({ name: '', score: 3, notes: '' });
+const emptyDraft = () =>
+  COMPETENCY_CATEGORIES.map((cat) => ({
+    key: cat.key,
+    name: cat.name,
+    rows: cat.competencies.map((name) => ({ name, score: '', notes: '' })),
+  }));
 
 export default function CompetencyMatrix() {
   const [teachers, setTeachers] = useState([]);
   const [teacherId, setTeacherId] = useState('');
-  const [matrix, setMatrix] = useState([]);
+  const [matrix, setMatrix] = useState(null);
   const [evaluations, setEvaluations] = useState([]);
   const [period, setPeriod] = useState('');
-  const [scores, setScores] = useState([emptyScoreRow()]);
+  const [draft, setDraft] = useState(emptyDraft());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,12 +25,12 @@ export default function CompetencyMatrix() {
     axiosClient
       .get('/ldm/teachers')
       .then(({ data }) => setTeachers(data.teachers))
-      .catch(() => setError('Failed to load teachers'));
+      .catch(() => setError('Չհաջողվեց բեռնել ուսուցիչների ցանկը'));
   }, []);
 
   const loadTeacherData = async (id) => {
     if (!id) {
-      setMatrix([]);
+      setMatrix(null);
       setEvaluations([]);
       return;
     }
@@ -36,36 +43,44 @@ export default function CompetencyMatrix() {
   };
 
   useEffect(() => {
-    loadTeacherData(teacherId).catch(() => setError('Failed to load competency data'));
+    loadTeacherData(teacherId).catch(() => setError('Չհաջողվեց բեռնել կարողունակությունների տվյալները'));
   }, [teacherId]);
 
-  const updateScoreRow = (index, field, value) => {
-    setScores((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  const updateDraftRow = (catIndex, rowIndex, field, value) => {
+    setDraft((cats) =>
+      cats.map((cat, ci) =>
+        ci !== catIndex
+          ? cat
+          : { ...cat, rows: cat.rows.map((row, ri) => (ri !== rowIndex ? row : { ...row, [field]: value })) }
+      )
+    );
   };
-  const addScoreRow = () => setScores((rows) => [...rows, emptyScoreRow()]);
-  const removeScoreRow = (index) => setScores((rows) => rows.filter((_, i) => i !== index));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!teacherId || !period.trim()) {
-      setError('Select a teacher and enter a period (e.g. "2026 Term 1")');
+      setError('Ընտրեք ուսուցչին և մուտքագրեք ժամանակահատվածը (օր.՝ «2026, 1-ին կիսամյակ»)');
       return;
     }
+    const competencies = draft
+      .flatMap((cat) => cat.rows)
+      .filter((row) => row.score !== '')
+      .map((row) => ({ name: row.name, score: Number(row.score), notes: row.notes }));
+
+    if (competencies.length === 0) {
+      setError('Մուտքագրեք գոնե մեկ կարողունակության գնահատական');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
-      await axiosClient.post('/ldm/evaluations', {
-        teacher: teacherId,
-        period,
-        competencies: scores
-          .filter((s) => s.name.trim())
-          .map((s) => ({ ...s, score: Number(s.score) })),
-      });
+      await axiosClient.post('/ldm/evaluations', { teacher: teacherId, period, competencies });
       setPeriod('');
-      setScores([emptyScoreRow()]);
+      setDraft(emptyDraft());
       await loadTeacherData(teacherId);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save evaluation');
+      setError(err.response?.data?.message || 'Չհաջողվեց պահպանել գնահատումը');
     } finally {
       setLoading(false);
     }
@@ -74,11 +89,16 @@ export default function CompetencyMatrix() {
   return (
     <div>
       <div className="card">
-        <h2>Competency Matrix</h2>
+        <h2>Առաջնորդական կարողունակությունների մատրիցա</h2>
+        <p className="muted">
+          18 հաստատագրված կարողունակություն, խմբավորված 5 կատեգորիայով, 0-5 սանդղակով։ Տես նաև{' '}
+          <Link to="/ldm/chat">դրսևորումների AI չատը</Link>, որտեղ մուտքագրած պահվածքները ինքնաբերաբար
+          կդասակարգվեն այս կարողունակություններում։
+        </p>
         <label>
-          <span>Teacher</span>
+          <span>Ուսուցիչ</span>
           <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-            <option value="">Select a teacher…</option>
+            <option value="">Ընտրեք ուսուցչին...</option>
             {teachers.map((t) => (
               <option key={t._id} value={t._id}>
                 {t.name}
@@ -87,84 +107,95 @@ export default function CompetencyMatrix() {
           </select>
         </label>
 
-        {teacherId && matrix.length > 0 && (
-          <table>
-            <thead>
-              <tr>
-                <th>Competency</th>
-                <th>Average</th>
-                <th>Trend</th>
-                <th>Evaluations</th>
-              </tr>
-            </thead>
-            <tbody>
-              {matrix.map((row) => (
-                <tr key={row.name}>
-                  <td>{row.name}</td>
-                  <td>
-                    <span className="score-pill">{row.average}/5</span>
-                  </td>
-                  <td>
-                    {row.trend.direction === 'up' && `▲ +${row.trend.change}`}
-                    {row.trend.direction === 'down' && `▼ ${row.trend.change}`}
-                    {row.trend.direction === 'flat' && '—'}
-                  </td>
-                  <td>{row.samples}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {teacherId && matrix.length === 0 && (
-          <p className="muted">No competency evaluations recorded for this teacher yet.</p>
+        {teacherId && matrix && (
+          <>
+            <p className="muted">
+              Վերջին գնահատման ժամանակահատվածը՝ {matrix.period || '—'} ({matrix.completed}/{matrix.total}{' '}
+              կարողունակություն գնահատված)
+            </p>
+            {matrix.categories.map((cat) => (
+              <div key={cat.key} style={{ marginBottom: '1rem' }}>
+                <h4 style={{ marginBottom: '0.3rem' }}>
+                  {cat.name} — <span className="score-pill">{cat.categoryAverage ?? '—'}/5</span>
+                </h4>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Կարողունակություն</th>
+                      <th>Գնահատական</th>
+                      <th>Մեկնաբանություն</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cat.rows.map((row) => (
+                      <tr key={row.name}>
+                        <td>{row.name}</td>
+                        <td>{row.score ?? '—'}/5</td>
+                        <td>{row.notes || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            <p style={{ fontWeight: 700 }}>Ընդհանուր միջին գնահատական՝ {matrix.overallAverage ?? '—'}/5</p>
+          </>
         )}
       </div>
 
       {teacherId && (
         <div className="card">
-          <h3>Add new evaluation</h3>
+          <h3>Նոր գնահատում</h3>
+          <p className="muted">
+            Սանդղակ՝ {SCORE_SCALE.map((s) => `${s.value}=${s.label}`).join(', ')}
+          </p>
           <form onSubmit={handleSubmit}>
             <label>
-              <span>Period</span>
+              <span>Ժամանակահատված</span>
               <input
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                placeholder='e.g. "2026 Term 1"'
+                placeholder='օր.՝ "2026, 1-ին կիսամյակ"'
               />
             </label>
 
-            {scores.map((row, i) => (
-              <div className="competency-row" key={i}>
-                <label>
-                  <span>Competency</span>
-                  <input value={row.name} onChange={(e) => updateScoreRow(i, 'name', e.target.value)} />
-                </label>
-                <label>
-                  <span>Score (1-5)</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={row.score}
-                    onChange={(e) => updateScoreRow(i, 'score', e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Notes</span>
-                  <input value={row.notes} onChange={(e) => updateScoreRow(i, 'notes', e.target.value)} />
-                </label>
-                <button type="button" className="secondary" onClick={() => removeScoreRow(i)}>
-                  Remove
-                </button>
+            {draft.map((cat, ci) => (
+              <div key={cat.key} style={{ marginBottom: '1rem' }}>
+                <h4 style={{ marginBottom: '0.3rem' }}>{cat.name}</h4>
+                {cat.rows.map((row, ri) => (
+                  <div className="competency-row" key={row.name}>
+                    <label>
+                      <span>{row.name}</span>
+                    </label>
+                    <label>
+                      <span>Գնահատական</span>
+                      <select
+                        value={row.score}
+                        onChange={(e) => updateDraftRow(ci, ri, 'score', e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {SCORE_SCALE.map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.value} — {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Մեկնաբանություն</span>
+                      <input
+                        value={row.notes}
+                        onChange={(e) => updateDraftRow(ci, ri, 'notes', e.target.value)}
+                      />
+                    </label>
+                  </div>
+                ))}
               </div>
             ))}
-            <button type="button" className="secondary" onClick={addScoreRow} style={{ marginBottom: '0.9rem' }}>
-              + Add competency
-            </button>
 
             {error && <p className="error-text">{error}</p>}
             <button type="submit" disabled={loading}>
-              {loading ? 'Saving…' : 'Save evaluation'}
+              {loading ? 'Պահպանվում է...' : 'Պահպանել գնահատումը'}
             </button>
           </form>
         </div>
@@ -172,12 +203,12 @@ export default function CompetencyMatrix() {
 
       {teacherId && evaluations.length > 0 && (
         <div className="card">
-          <h3>Evaluation history</h3>
+          <h3>Գնահատումների պատմություն</h3>
           <table>
             <thead>
               <tr>
-                <th>Period</th>
-                <th>Average</th>
+                <th>Ժամանակահատված</th>
+                <th>Միջին</th>
                 <th></th>
               </tr>
             </thead>
@@ -186,7 +217,7 @@ export default function CompetencyMatrix() {
                 <tr key={ev._id}>
                   <td>{ev.period}</td>
                   <td>
-                    <span className="score-pill">{ev.averageScore}/5</span>
+                    <span className="score-pill">{ev.averageScore ?? '—'}/5</span>
                   </td>
                   <td>
                     <PdfExportButton

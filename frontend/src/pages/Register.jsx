@@ -15,7 +15,7 @@ export default function Register() {
     setError('');
     try {
       await register(form);
-      navigate('/');
+      navigate('/teacher');
     } catch (err) {
       setError(err.message);
     }
@@ -23,21 +23,22 @@ export default function Register() {
 
   return (
     <div className="auth-page card">
-      <h2>Create a teacher account</h2>
+      <h2>Ուսուցչի գրանցում</h2>
       <p className="muted">
-        New accounts start as a Teacher. An admin can promote you to LDM or Admin later.
+        Նոր հաշիվները ստեղծվում են «Ուսուցիչ» դերով։ Դասավանդման աջակցման մասնագետի (ԱԶՂ) հաշիվը
+        ստեղծում է միայն ադմինիստրատորը։
       </p>
       <form onSubmit={handleSubmit}>
         <label>
-          <span>Full name</span>
+          <span>Անուն, ազգանուն</span>
           <input name="name" value={form.name} onChange={handleChange} required />
         </label>
         <label>
-          <span>Email</span>
+          <span>Էլ. փոստ</span>
           <input type="email" name="email" value={form.email} onChange={handleChange} required />
         </label>
         <label>
-          <span>Password</span>
+          <span>Գաղտնաբառ</span>
           <input
             type="password"
             name="password"
@@ -48,20 +49,20 @@ export default function Register() {
           />
         </label>
         <label>
-          <span>School (optional)</span>
+          <span>Դպրոց (ոչ պարտադիր)</span>
           <input name="school" value={form.school} onChange={handleChange} />
         </label>
         <label>
-          <span>Region (optional)</span>
+          <span>Մարզ (ոչ պարտադիր)</span>
           <input name="region" value={form.region} onChange={handleChange} />
         </label>
         {error && <p className="error-text">{error}</p>}
         <button type="submit" disabled={loading}>
-          {loading ? 'Creating account…' : 'Register'}
+          {loading ? 'Գրանցում...' : 'Գրանցվել'}
         </button>
       </form>
       <p className="muted">
-        Already have an account? <Link to="/login">Log in</Link>
+        Արդեն ունեք հաշիվ: <Link to="/login">Մուտք գործել</Link>
       </p>
     </div>
   );
