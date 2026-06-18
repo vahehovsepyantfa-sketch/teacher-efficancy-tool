@@ -13,7 +13,7 @@ const getClient = () => {
   return client;
 };
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 const generateText = async (prompt) => {
   const ai = getClient();
