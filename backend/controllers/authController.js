@@ -76,4 +76,36 @@ const getMe = async (req, res) => {
   res.json({ user: req.user.toSafeObject() });
 };
 
-module.exports = { register, login, getMe };
+
+/**
+ * POST /api/auth/bootstrap-admin
+ * One-time, self-disabling bootstrap route: creates the very first admin
+ * account. Only works while zero admin accounts exist in the database.
+ * Once an admin exists, this route always returns 403.
+ */
+const bootstrapAdmin = async (req, res) => {
+  try {
+    const existingAdminCount = await User.countDocuments({ role: 'admin' });
+    if (existingAdminCount > 0) {
+      return res.status(403).json({ message: 'An admin account already exists; bootstrap is disabled' });
+    }
+
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'name, email and password are required' });
+    }
+
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return res.status(409).json({ message: 'An account with this email already exists' });
+    }
+
+    const user = await User.create({ name, email, password, role: 'admin' });
+    const token = signToken(user);
+    res.status(201).json({ token, user: user.toSafeObject() });
+  } catch (err) {
+    res.status(500).json({ message: 'Bootstrap failed', error: err.message });
+  }
+};
+
+module.exports = { register, login, getMe, bootstrapAdmin };
