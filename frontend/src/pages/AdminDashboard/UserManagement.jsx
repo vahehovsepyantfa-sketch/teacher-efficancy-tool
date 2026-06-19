@@ -3,7 +3,7 @@ import axiosClient from '../../api/axiosClient';
 
 const ROLES = ['teacher', 'ldm', 'admin'];
 const ROLE_LABELS = { teacher: 'Ուսուցիչ', ldm: 'ԱԶՂ մասնագետ', admin: 'Ադմինիստրատոր' };
-const emptyForm = { name: '', email: '', password: '', role: 'teacher', school: '', region: '' };
+const emptyForm = { name: '', email: '', password: '', role: 'teacher', school: '', region: '', assignedLdm: '' };
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -27,7 +27,10 @@ export default function UserManagement() {
     setLoading(true);
     setError('');
     try {
-      await axiosClient.post('/admin/users', form);
+      await axiosClient.post('/admin/users', {
+        ...form,
+        assignedLdm: form.role === 'teacher' && form.assignedLdm ? form.assignedLdm : undefined,
+      });
       setForm(emptyForm);
       await loadUsers();
     } catch (err) {
@@ -85,7 +88,7 @@ export default function UserManagement() {
           </label>
           <label>
             <span>Դեր</span>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, assignedLdm: '' })}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABELS[r]}
@@ -93,6 +96,24 @@ export default function UserManagement() {
               ))}
             </select>
           </label>
+          {form.role === 'teacher' && (
+            <label>
+              <span>Կցվող ԱԶՂ մասնագետ (եթե հասանելի է)</span>
+              <select value={form.assignedLdm} onChange={(e) => setForm({ ...form, assignedLdm: e.target.value })}>
+                <option value="">Չկցված (կարող եք կցել ավելի ուշ)</option>
+                {ldms.map((l) => (
+                  <option key={l._id} value={l._id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              {ldms.length === 0 && (
+                <p className="muted form-section-hint">
+                  Դեռևս չկա ստեղծված ԱԶՂ մասնագետ։ Ուսուցիչը կարող եք կցել ավելի ուշ՝ ստորև բերված ցանկից։
+                </p>
+              )}
+            </label>
+          )}
           {error && <p className="error-text">{error}</p>}
           <button type="submit" disabled={loading}>
             {loading ? 'Ստեղծվում է...' : 'Ստեղծել օգտատեր'}
