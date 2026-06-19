@@ -48,32 +48,37 @@ const createUser = async (req, res) => {
 
 /**
  * PATCH /api/admin/users/:id
- * Update role, active status, school/region, or LDM assignment.
+ * Update role, active status, school/region, LDM assignment, name, or
+ * reset the password. Loaded via findById + save() (rather than
+ * findByIdAndUpdate) so the password is run through the model's
+ * pre-save bcrypt hashing hook whenever it's included.
  */
 const updateUser = async (req, res) => {
   try {
-    const { role, isActive, school, region, assignedLdm, name } = req.body;
+    const { role, isActive, school, region, assignedLdm, name, password } = req.body;
 
     if (role && !ROLES.includes(role)) {
       return res.status(400).json({ message: `role must be one of: ${ROLES.join(', ')}` });
     }
 
-    const update = {};
-    if (role !== undefined) update.role = role;
-    if (isActive !== undefined) update.isActive = isActive;
-    if (school !== undefined) update.school = school;
-    if (region !== undefined) update.region = region;
-    if (assignedLdm !== undefined) update.assignedLdm = assignedLdm || null;
-    if (name !== undefined) update.name = name;
+    if (password && password.length < 6) {
+      return res.status(400).json({ message: 'password must be at least 6 characters' });
+    }
 
-    const user = await User.findByIdAndUpdate(req.params.id, update, {
-      new: true,
-      runValidators: true,
-    });
-
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    if (role !== undefined) user.role = role;
+    if (isActive !== undefined) user.isActive = isActive;
+    if (school !== undefined) user.school = school;
+    if (region !== undefined) user.region = region;
+    if (assignedLdm !== undefined) user.assignedLdm = assignedLdm || null;
+    if (name !== undefined) user.name = name;
+    if (password) user.password = password;
+
+    await user.save();
 
     res.json({ user: user.toSafeObject() });
   } catch (err) {

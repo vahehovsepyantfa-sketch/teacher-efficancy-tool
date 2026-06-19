@@ -11,28 +11,17 @@ const ENTRIES = [
       'Լրացրու օրական ինքնավերլուծությունը (դասի մասին, հաջողված ուղղությունները, նախորդ նպատակների ընթացքը)։ Միայն դու կտեսնես քո մուտքագրած տվյալները։',
   },
   {
-    key: 'lesson',
+    key: 'ldm',
     title: 'Դասավանդման աջակցման մասնագետ',
-    subtitle: 'Դասի գնահատում',
     role: 'ldm',
     next: '/ldm/observations',
     description:
-      'Տեսեք ուսուցչի ինքնավերլուծությունը, գնահատեք դասապլանը և տեսաձայնագրությունը, կատարեք գրառումներ դասի մասին։',
-  },
-  {
-    key: 'leadership',
-    title: 'Դասավանդման աջակցման մասնագետ',
-    subtitle: 'Առաջնորդական կարողունակություններ',
-    role: 'ldm',
-    next: '/ldm/competency',
-    description:
-      'Գնահատեք 18 առաջնորդական կարողունակությունները 5 խմբերով, և մուտքագրեք դրսևորումները AI չատի միջոցով, որը ինքնաբերաբար կդասակարգի դրանք իրենց կարողունակություններում։',
+      'Տեսեք ուսուցչի ինքնավերլուծությունը, գնահատեք դասապլանը և տեսաձայնագրությունը, գնահատեք 18 առաջնորդական կարողունակությունները 5 խմբերով՝ AI չատի օգնությամբ։',
   },
 ];
 
 export default function Home() {
   const { user } = useAuth();
-
   return (
     <div className="home-page">
       <div className="home-hero">
@@ -42,9 +31,7 @@ export default function Home() {
       <div className="home-cards">
         {ENTRIES.map((entry) => {
           const alreadyRightRole = user && (user.role === entry.role || user.role === 'admin');
-          const to = alreadyRightRole
-            ? entry.next
-            : `/login?role=${entry.role}&next=${encodeURIComponent(entry.next)}`;
+          const to = alreadyRightRole ? entry.next : `/login?role=${entry.role}&next=${encodeURIComponent(entry.next)}`;
           return (
             <div className="home-card" key={entry.key}>
               <h3>{entry.title}</h3>

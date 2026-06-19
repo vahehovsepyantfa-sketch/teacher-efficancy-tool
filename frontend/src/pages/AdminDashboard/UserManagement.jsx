@@ -10,6 +10,8 @@ export default function UserManagement() {
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pwInputs, setPwInputs] = useState({});
+  const [pwStatus, setPwStatus] = useState({});
 
   const loadUsers = async () => {
     const { data } = await axiosClient.get('/admin/users');
@@ -21,6 +23,8 @@ export default function UserManagement() {
   }, []);
 
   const ldms = users.filter((u) => u.role === 'ldm');
+  const teachers = users.filter((u) => u.role === 'teacher');
+  const admins = users.filter((u) => u.role === 'admin');
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -57,6 +61,101 @@ export default function UserManagement() {
       setError('Չհաջողվեց ապաակտիվացնել օգտատերին');
     }
   };
+
+  const resetPassword = async (id) => {
+    const value = pwInputs[id] || '';
+    if (value.length < 6) {
+      setPwStatus((s) => ({ ...s, [id]: 'Գաղտնաբառը պետք է լինի առնվազն 6 նշան' }));
+      return;
+    }
+    try {
+      await axiosClient.patch(`/admin/users/${id}`, { password: value });
+      setPwInputs((s) => ({ ...s, [id]: '' }));
+      setPwStatus((s) => ({ ...s, [id]: 'Գաղտնաբառը փոխվեց' }));
+    } catch {
+      setPwStatus((s) => ({ ...s, [id]: 'Չհաջողվեց փոխել գաղտնաբառը' }));
+    }
+  };
+
+  const renderRow = (u) => (
+    <tr key={u._id}>
+      <td>{u.name}</td>
+      <td>{u.email}</td>
+      <td>
+        <select value={u.role} onChange={(e) => updateUser(u._id, { role: e.target.value })}>
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        {u.role === 'teacher' ? (
+          <select
+            value={u.assignedLdm?._id || ''}
+            onChange={(e) => updateUser(u._id, { assignedLdm: e.target.value || null })}
+          >
+            <option value="">Չկցված</option>
+            {ldms.map((l) => (
+              <option key={l._id} value={l._id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          '—'
+        )}
+      </td>
+      <td>{u.isActive ? 'Ակտիվ' : 'Ապաակտիվացված'}</td>
+      <td>
+        <div className="row-password-reset">
+          <input
+            type="password"
+            placeholder="Նոր գաղտնաբառ"
+            minLength={6}
+            value={pwInputs[u._id] || ''}
+            onChange={(e) => setPwInputs((s) => ({ ...s, [u._id]: e.target.value }))}
+          />
+          <button type="button" className="secondary" onClick={() => resetPassword(u._id)}>
+            Փոխել
+          </button>
+          {pwStatus[u._id] && <p className="muted form-section-hint">{pwStatus[u._id]}</p>}
+        </div>
+      </td>
+      <td>
+        {u.isActive && (
+          <button type="button" className="secondary" onClick={() => deactivateUser(u._id)}>
+            Ապաակտիվացնել
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+
+  const renderTable = (title, list, emptyText) => (
+    <div className="card">
+      <h3>{title}</h3>
+      {list.length === 0 ? (
+        <p className="muted">{emptyText}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Անուն</th>
+              <th>Էլ. փոստ</th>
+              <th>Դեր</th>
+              <th>Կցված ԱԶՂ մասնագետ</th>
+              <th>Կարգավիճակ</th>
+              <th>Գաղտնաբառի վերակայում</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>{list.map(renderRow)}</tbody>
+        </table>
+      )}
+    </div>
+  );
 
   return (
     <div>
@@ -121,63 +220,9 @@ export default function UserManagement() {
         </form>
       </div>
 
-      <div className="card">
-        <h3>Բոլոր օգտատերերը</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Անուն</th>
-              <th>Էլ. փոստ</th>
-              <th>Դեր</th>
-              <th>Կցված ԱԶՂ մասնագետ</th>
-              <th>Կարգավիճակ</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u._id}>
-                <td>{u.name}</td>
-                <td>{u.email}</td>
-                <td>
-                  <select value={u.role} onChange={(e) => updateUser(u._id, { role: e.target.value })}>
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {ROLE_LABELS[r]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  {u.role === 'teacher' ? (
-                    <select
-                      value={u.assignedLdm?._id || ''}
-                      onChange={(e) => updateUser(u._id, { assignedLdm: e.target.value || null })}
-                    >
-                      <option value="">Չկցված</option>
-                      {ldms.map((l) => (
-                        <option key={l._id} value={l._id}>
-                          {l.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td>{u.isActive ? 'Ակտիվ' : 'Ապաակտիվացված'}</td>
-                <td>
-                  {u.isActive && (
-                    <button type="button" className="secondary" onClick={() => deactivateUser(u._id)}>
-                      Ապաակտիվացնել
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {renderTable('Գրանցված ուսուցիչներ', teachers, 'Դեռևս չկա գրանցված ուսուցիչ։')}
+      {renderTable('Գրանցված ԱԶՂ մասնագետներ', ldms, 'Դեռևս չկա գրանցված ԱԶՂ մասնագետ։')}
+      {renderTable('Ադմինիստրատորներ', admins, 'Դեռևս չկա ադմինիստրատոր։')}
     </div>
   );
 }

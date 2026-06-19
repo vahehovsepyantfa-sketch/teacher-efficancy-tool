@@ -488,3 +488,21 @@ th { color: var(--color-text-muted); font-weight: 600; }
   font-style: italic;
   margin: 0.2rem 0 0;
 }
+
+.row-password-reset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.row-password-reset input {
+  width: 9rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.row-password-reset .form-section-hint {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+}
