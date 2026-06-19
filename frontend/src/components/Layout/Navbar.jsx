@@ -7,13 +7,11 @@ const LINKS_BY_ROLE = {
     { to: '/ldm/observations', label: 'Դասի գնահատում' },
     { to: '/ldm/competency', label: 'Կարողունակությունների մատրիցա' },
     { to: '/ldm/chat', label: 'Դրսևորումների չատ (AI)' },
-    { to: '/ldm/ai-diary', label: 'AI օրագիր' },
   ],
   admin: [
     { to: '/ldm/observations', label: 'Դասի գնահատում' },
     { to: '/ldm/competency', label: 'Կարողունակությունների մատրիցա' },
     { to: '/ldm/chat', label: 'Դրսևորումների չատ (AI)' },
-    { to: '/ldm/ai-diary', label: 'AI օրագիր' },
     { to: '/admin/users', label: 'Օգտատերերի կառավարում' },
   ],
 };

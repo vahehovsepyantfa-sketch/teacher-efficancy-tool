@@ -1,14 +1,13 @@
 const TeacherReflection = require('../models/TeacherReflection');
-const LessonObservation = require('../models/LessonObservation');
-const DailyNote = require('../models/DailyNote');
 const Manifestation = require('../models/Manifestation');
+const CompetencyEvaluation = require('../models/CompetencyEvaluation');
 const User = require('../models/User');
 const {
   generateReflectionFeedback,
-  generateDiarySummary,
   classifyManifestation: classifyManifestationAi,
+  suggestCompetencyScores: suggestCompetencyScoresAi,
 } = require('../services/geminiAiService');
-const { buildCategorizedMatrix } = require('../utils/competencyFramework');
+const { buildCategorizedMatrix, ALL_COMPETENCIES } = require('../utils/competencyFramework');
 
 /**
  * POST /api/ai/reflections/:id/feedback
@@ -37,77 +36,6 @@ const generateFeedbackForReflection = async (req, res) => {
   }
 };
 
-/**
- * POST /api/ai/diary
- * Body: { teacher: <id>, days: <number = 14> }
- * Synthesizes recent reflections, observations, and notes for a teacher
- * into a narrative summary, then saves it as an "ai"-sourced DailyNote so
- * it shows up in that teacher's diary history.
- */
-const generateTeacherDiary = async (req, res) => {
-  try {
-    const { teacher: teacherId, days = 14 } = req.body;
-
-    if (!teacherId) {
-      return res.status(400).json({ message: 'teacher is required' });
-    }
-
-    const teacher = await User.findById(teacherId);
-    if (!teacher) {
-      return res.status(404).json({ message: 'Teacher not found' });
-    }
-
-    const since = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
-
-    const [reflections, observations, notes] = await Promise.all([
-      TeacherReflection.find({ teacher: teacherId, date: { $gte: since } }).sort({ date: 1 }),
-      LessonObservation.find({ teacher: teacherId, date: { $gte: since } }).sort({ date: 1 }),
-      DailyNote.find({ teacher: teacherId, date: { $gte: since }, source: { $ne: 'ai' } }).sort({
-        date: 1,
-      }),
-    ]);
-
-    const entries = [
-      ...reflections.map((r) => ({ type: 'reflection', date: r.date, text: r.content })),
-      ...observations.map((o) => ({
-        type: 'observation',
-        date: o.date,
-        text: `Strengths: ${o.strengths || '—'}. Areas for growth: ${o.areasForGrowth || '—'}.`,
-      })),
-      ...notes.map((n) => ({ type: 'note', date: n.date, text: n.note })),
-    ].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const summary = await generateDiarySummary({ teacherName: teacher.name, entries });
-
-    const diaryEntry = await DailyNote.create({
-      author: req.user._id,
-      teacher: teacherId,
-      note: summary,
-      source: 'ai',
-    });
-
-    res.status(201).json({ diaryEntry, entriesConsidered: entries.length });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to generate diary', error: err.message });
-  }
-};
-
-/**
- * GET /api/ai/diary?teacher=<id>
- * History of AI-generated diary entries for a teacher.
- */
-const listTeacherDiary = async (req, res) => {
-  if (!req.query.teacher) {
-    return res.status(400).json({ message: 'teacher query param is required' });
-  }
-
-  const entries = await DailyNote.find({ teacher: req.query.teacher, source: 'ai' }).sort({
-    date: -1,
-  });
-
-  res.json({ entries });
-};
-
 const assertCanAccessTeacher = async (req, teacherId) => {
   if (req.user.role === 'admin') return true;
   const teacher = await User.findOne({ _id: teacherId, assignedLdm: req.user._id, role: 'teacher' });
@@ -115,11 +43,62 @@ const assertCanAccessTeacher = async (req, teacherId) => {
 };
 
 /**
+ * Finds the teacher's most recent CompetencyEvaluation (any source), or
+ * creates a fresh one pre-seeded with all 18 framework rows (unscored) if
+ * none exists yet. Returns a live Mongoose document so callers can mutate
+ * and `.save()` it.
+ */
+const findOrCreateCurrentEvaluation = async (teacherId, evaluatorId) => {
+  let evaluation = await CompetencyEvaluation.findOne({ teacher: teacherId }).sort({ createdAt: -1 });
+
+  if (!evaluation) {
+    evaluation = await CompetencyEvaluation.create({
+      teacher: teacherId,
+      evaluator: evaluatorId,
+      period: 'Ընթացիկ',
+      competencies: ALL_COMPETENCIES.map((name) => ({ name, score: null, notes: '' })),
+      categoryAverages: [],
+      averageScore: null,
+      source: 'ai-chat',
+    });
+  }
+
+  return evaluation;
+};
+
+/**
+ * Appends `text` into the matching competency's `notes` field on the
+ * teacher's current evaluation, and recomputes its category/overall
+ * averages. This is how the manifestation chat lands inside the
+ * Competency Matrix.
+ */
+const appendNoteToEvaluation = async (teacherId, evaluatorId, competencyName, text) => {
+  if (!competencyName) return null;
+
+  const evaluation = await findOrCreateCurrentEvaluation(teacherId, evaluatorId);
+
+  let entry = evaluation.competencies.find((c) => c.name === competencyName);
+  if (!entry) {
+    evaluation.competencies.push({ name: competencyName, score: null, notes: '' });
+    entry = evaluation.competencies[evaluation.competencies.length - 1];
+  }
+  entry.notes = entry.notes ? `${entry.notes}\n${text}` : text;
+
+  const { categories, overallAverage } = buildCategorizedMatrix(evaluation.competencies);
+  evaluation.categoryAverages = categories.map((c) => ({ key: c.key, name: c.name, average: c.categoryAverage }));
+  evaluation.averageScore = overallAverage;
+
+  await evaluation.save();
+  return evaluation;
+};
+
+/**
  * POST /api/ai/manifestations
  * Body: { teacher, period, text }
  * The chat-style sorter: one typed "manifestation" (observed behavior) is
- * classified by Gemini into one of the 18 fixed leadership competencies
- * and saved, so it can be shown "sitting" inside that competency's bucket.
+ * classified by Gemini into one of the 18 fixed leadership competencies,
+ * saved to the chat log, AND landed inside that competency's notes field
+ * on the teacher's current Competency Matrix evaluation.
  */
 const classifyManifestation = async (req, res) => {
   try {
@@ -148,7 +127,12 @@ const classifyManifestation = async (req, res) => {
       aiNote: result.note,
     });
 
-    res.status(201).json({ manifestation });
+    let evaluation = null;
+    if (result.competency) {
+      evaluation = await appendNoteToEvaluation(teacher, req.user._id, result.competency, text);
+    }
+
+    res.status(201).json({ manifestation, evaluationId: evaluation?._id || null });
   } catch (err) {
     res.status(500).json({ message: 'Failed to classify manifestation', error: err.message });
   }
@@ -188,10 +172,37 @@ const listManifestations = async (req, res) => {
   res.json({ manifestations, grouped, uncategorized });
 };
 
+/**
+ * POST /api/ai/competencies/suggest-scores
+ * Body: { teacher, competencies: [{name, notes}] }
+ * Powers the Competency Matrix's "գնահատել ըստ մեկնաբանությունների" button:
+ * AI suggests a 0-5 score for every row that has notes, based purely on
+ * that note text. Scores are returned only — the LDM applies/edits them
+ * client-side and still presses the normal save button to persist.
+ */
+const suggestScores = async (req, res) => {
+  try {
+    const { teacher, competencies } = req.body;
+
+    if (!teacher || !Array.isArray(competencies)) {
+      return res.status(400).json({ message: 'teacher and competencies are required' });
+    }
+
+    const allowed = await assertCanAccessTeacher(req, teacher);
+    if (!allowed) {
+      return res.status(403).json({ message: 'This teacher is not assigned to you' });
+    }
+
+    const suggestions = await suggestCompetencyScoresAi(competencies);
+    res.json({ suggestions });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to suggest scores', error: err.message });
+  }
+};
+
 module.exports = {
   generateFeedbackForReflection,
-  generateTeacherDiary,
-  listTeacherDiary,
   classifyManifestation,
   listManifestations,
+  suggestScores,
 };

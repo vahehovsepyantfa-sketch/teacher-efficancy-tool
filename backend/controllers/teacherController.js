@@ -2,6 +2,8 @@ const TeacherReflection = require('../models/TeacherReflection');
 const LessonObservation = require('../models/LessonObservation');
 const CompetencyEvaluation = require('../models/CompetencyEvaluation');
 const User = require('../models/User');
+const { computeTeachingRubric, normalizeGoals } = require('../utils/observationRubrics');
+const { generateObservationPdf } = require('../services/pdfGeneratorService');
 
 /**
  * GET /api/teacher/me
@@ -18,36 +20,45 @@ const getProfile = async (req, res) => {
 const createReflection = async (req, res) => {
   try {
     const {
-      content,
-      moodRating,
-      inputMethod,
-      date,
-      lessonPlanLink,
-      recordingLink,
+      academicYear,
       subject,
+      topic,
       grade,
       studentsCount,
+      lessonPlanLink,
+      recordingLink,
       successfulDirections,
       previousGoalsProgress,
+      selfRubric,
+      goals,
+      content,
+      inputMethod,
+      date,
     } = req.body;
 
-    if (!content) {
-      return res.status(400).json({ message: 'content is required' });
+    // Per spec page 2: both link fields are marked "Պարտադիր" (required).
+    if (!lessonPlanLink || !recordingLink) {
+      return res
+        .status(400)
+        .json({ message: 'lessonPlanLink and recordingLink are required' });
     }
 
     const reflection = await TeacherReflection.create({
       teacher: req.user._id,
-      content,
-      moodRating,
-      inputMethod: inputMethod === 'voice' ? 'voice' : 'text',
       date: date || Date.now(),
-      lessonPlanLink,
-      recordingLink,
+      academicYear,
       subject,
+      topic,
       grade,
       studentsCount,
+      lessonPlanLink,
+      recordingLink,
       successfulDirections,
       previousGoalsProgress,
+      selfRubric: computeTeachingRubric(selfRubric),
+      goals: normalizeGoals(goals),
+      content: content || '',
+      inputMethod: inputMethod === 'voice' ? 'voice' : 'text',
     });
 
     res.status(201).json({ reflection });
@@ -70,10 +81,38 @@ const listMyReflections = async (req, res) => {
  * Lesson observations written about the logged-in teacher.
  */
 const listMyObservations = async (req, res) => {
-  const observations = await LessonObservation.find({ teacher: req.user._id })
+  // Per spec page 5: the teacher only sees an observation once the LDM has
+  // pressed "Ուղարկել" (Send) on it.
+  const observations = await LessonObservation.find({ teacher: req.user._id, sent: true })
     .populate('ldm', 'name email')
     .sort({ date: -1 });
   res.json({ observations });
+};
+
+/**
+ * GET /api/teacher/observations/:id/pdf
+ * The teacher may only download an observation about themself, and only
+ * once the LDM has sent it.
+ */
+const getObservationPdf = async (req, res) => {
+  const observation = await LessonObservation.findOne({
+    _id: req.params.id,
+    teacher: req.user._id,
+    sent: true,
+  })
+    .populate('teacher', 'name email')
+    .populate('ldm', 'name email');
+
+  if (!observation) {
+    return res.status(404).json({ message: 'Observation not found' });
+  }
+
+  const pdfBuffer = await generateObservationPdf(observation);
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="observation-${observation._id}.pdf"`,
+  });
+  res.send(pdfBuffer);
 };
 
 /**
@@ -92,5 +131,6 @@ module.exports = {
   createReflection,
   listMyReflections,
   listMyObservations,
+  getObservationPdf,
   listMyEvaluations,
 };

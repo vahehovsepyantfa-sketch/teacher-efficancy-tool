@@ -47,29 +47,6 @@ something concrete from the reflection, then suggest one practical next step.`;
   return generateText(prompt);
 };
 
-/**
- * Synthesizes a narrative "diary" summarizing a teacher's recent reflections,
- * lesson observations, and notes into a short progress story for their LDM.
- */
-const generateDiarySummary = async ({ teacherName, entries }) => {
-  const formatted = entries
-    .map((e) => `- [${e.type} | ${new Date(e.date).toISOString().slice(0, 10)}] ${e.text}`)
-    .join('\n');
-
-  const prompt = `You are helping an LDM (Learning & Development Manager) at Teach For Armenia
-review a teacher's recent development. Here are dated entries for ${teacherName},
-combining their self-reflections, lesson observation notes, and coach notes:
-
-${formatted || '(no entries in this period)'}
-
-Write a short (5-8 sentence) "diary" style narrative summarizing ${teacherName}'s
-recent growth: recurring themes, visible progress, and 1-2 areas to focus on next.
-Write in second person plural ("the teacher has been...") and keep an encouraging,
-professional tone suitable for a coaching conversation.`;
-
-  return generateText(prompt);
-};
-
 const COMPETENCY_LIST_TEXT = COMPETENCY_CATEGORIES
   .map((cat) => `${cat.name}:\n${cat.competencies.map((c) => `  - ${c}`).join('\n')}`)
   .join('\n');
@@ -142,8 +119,82 @@ ${text}
   };
 };
 
+/**
+ * Given a set of competency rows that already have notes/comments but no
+ * (or an outdated) score, asks Gemini to suggest a 0-5 score for each one
+ * based purely on its notes text. Powers the Competency Matrix's
+ * "գնահատել ըստ մեկնաբանությունների" (evaluate per the comments) button —
+ * the LDM can freely edit any suggested score afterward.
+ *
+ * @param {{name: string, notes: string}[]} rows
+ * @returns {Promise<{name: string, score: number|null, rationale: string}[]>}
+ */
+const suggestCompetencyScores = async (rows) => {
+  const withNotes = (rows || []).filter((r) => r.notes && r.notes.trim());
+
+  if (withNotes.length === 0) {
+    return [];
+  }
+
+  const ai = getClient();
+
+  if (!ai) {
+    return withNotes.map((r) => ({
+      name: r.name,
+      score: null,
+      rationale: '[AI գնահատումը հասանելի չէ. GEMINI_API_KEY կարգավորված չէ]',
+    }));
+  }
+
+  const rowsText = withNotes
+    .map((r, i) => `${i + 1}. Կարողունակություն՝ "${r.name}"\n   Մեկնաբանություն/նշումներ՝ """${r.notes}"""`)
+    .join('\n');
+
+  const prompt = `Դու օգնում ես ուսուցչական աջակցության մասնագետին (ԱԶՂ) գնահատել ուսուցիչների
+առաջնորդական կարողունակությունները 0-5 սանդղակով, հենվելով բացառապես իր մուտքագրած
+մեկնաբանությունների/նշումների վրա։
+
+Սանդղակը՝
+0 = Լիովին բացակայում է, 1 = Ապահովված չէ, 2 = Խիստ թերի է ապահովված, 3 = Մասամբ է ապահովված,
+4 = Գրեթե ապահովված է, 5 = Լիովին ապահովված է։
+
+Կարողունակություններ և դրանց մեկնաբանությունները՝
+${rowsText}
+
+Յուրաքանչյուր կարողունակության համար գնահատիր 0-5 միավոր՝ բացառապես մեկնաբանության բովանդակության հիման վրա։
+Պատասխանիր ՄԻԱՅՆ վավեր JSON զանգվածով, առանց որևէ այլ տեքստի կամ markdown blokի, հետևյալ կառուցվածքով՝
+[{"name": "<կարողունակության ճշգրիտ անվանում>", "score": <0-5 ամբողջ թիվ>, "rationale": "<մեկ նախադասությամբ հիմնավորում հայերենով>"}, ...]`;
+
+  const responseText = await generateText(prompt);
+
+  let parsed = null;
+  try {
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+  } catch (err) {
+    parsed = null;
+  }
+
+  if (!Array.isArray(parsed)) {
+    return withNotes.map((r) => ({
+      name: r.name,
+      score: null,
+      rationale: 'AI պատասխանը չհաջողվեց մեկնաբանել',
+    }));
+  }
+
+  return withNotes.map((r) => {
+    const match = parsed.find((p) => p && p.name === r.name);
+    const score =
+      match && typeof match.score === 'number' && match.score >= 0 && match.score <= 5
+        ? Math.round(match.score)
+        : null;
+    return { name: r.name, score, rationale: match?.rationale || '' };
+  });
+};
+
 module.exports = {
   generateReflectionFeedback,
-  generateDiarySummary,
   classifyManifestation,
+  suggestCompetencyScores,
 };

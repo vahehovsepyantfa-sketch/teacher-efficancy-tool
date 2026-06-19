@@ -56,6 +56,65 @@ const drawLink = (doc, label, url) => {
   doc.moveDown(0.5);
 };
 
+const drawRubricRows = (doc, rows) => {
+  (rows || []).forEach((r) => {
+    doc.fontSize(10.5).font('Body-Bold').text(`${r.label}`);
+    doc
+      .fontSize(10.5)
+      .font('Body')
+      .text(`Միավոր՝ ${typeof r.score === 'number' ? r.score : '—'}/5${r.comment ? `  —  ${r.comment}` : ''}`);
+    doc.moveDown(0.4);
+  });
+};
+
+const drawFlatRubric = (doc, title, rubric) => {
+  doc.fontSize(13).font('Body-Bold').text(title);
+  doc.moveDown(0.3);
+  drawRubricRows(doc, rubric?.rows);
+  doc
+    .fontSize(11)
+    .font('Body-Bold')
+    .text(`Ընդհանուր միջինացված միավորը՝ ${rubric?.overallAverage ?? '—'}/5`);
+  if (rubric?.generalComment) {
+    doc.fontSize(10.5).font('Body').text(`Ընդհանուր մեկնաբանություն՝ ${rubric.generalComment}`);
+  }
+  doc.moveDown(0.8);
+};
+
+const drawTeachingRubric = (doc, title, rubric) => {
+  doc.fontSize(13).font('Body-Bold').text(title);
+  doc.moveDown(0.2);
+  if (rubric?.headline) {
+    doc
+      .fontSize(10.5)
+      .font('Body')
+      .text(
+        `Ակնկալիքների և ուղղությունների վերաբերյալ ընդհանուր պնդումներ՝ ${
+          typeof rubric.headline.score === 'number' ? rubric.headline.score : '—'
+        }/5${rubric.headline.comment ? ` — ${rubric.headline.comment}` : ''}`
+      );
+    doc.moveDown(0.4);
+  }
+  (rubric?.categories || []).forEach((cat) => {
+    doc.fontSize(11.5).font('Body-Bold').text(cat.name);
+    doc.moveDown(0.2);
+    drawRubricRows(doc, cat.rows);
+    doc
+      .fontSize(10.5)
+      .font('Body-Bold')
+      .text(`Բաղադրիչի միջին միավորը՝ ${cat.categoryAverage ?? '—'}/5`);
+    if (cat.categoryComment) {
+      doc.fontSize(10.5).font('Body').text(`Մեկնաբանություն՝ ${cat.categoryComment}`);
+    }
+    doc.moveDown(0.6);
+  });
+  doc.fontSize(11).font('Body-Bold').text(`Ամփոփիչ միավորը (միջինացված)՝ ${rubric?.overallAverage ?? '—'}/5`);
+  if (rubric?.summaryComment) {
+    doc.fontSize(10.5).font('Body').text(`Ամփոփիչ դիտարկումներ՝ ${rubric.summaryComment}`);
+  }
+  doc.moveDown(0.8);
+};
+
 /**
  * PDF for a single LessonObservation. `observation` should already have
  * `teacher` and `ldm` populated with at least a `name` field.
@@ -64,30 +123,62 @@ const generateObservationPdf = (observation) =>
   renderToBuffer((doc) => {
     drawHeader(
       doc,
-      'Դասի դիտարկման հաշվետվություն',
+      'Դասի դիտարկման և վերլուծության հաշվետվություն',
       `${observation.teacher?.name || 'Անհայտ ուսուցիչ'} — ${fmtDate(observation.date)}`
     );
 
-    drawSection(doc, 'Դիտարկող', observation.ldm?.name || 'Անհայտ մասնագետ');
+    drawSection(doc, 'Դիտարկող (ԱԶՂ)', observation.ldm?.name || 'Անհայտ մասնագետ');
     drawSection(doc, 'Առարկա / Դասարան', `${observation.subject || '—'} / ${observation.grade || '—'}`);
     drawLink(doc, 'Դասի պլան', observation.lessonPlanLink);
     drawLink(doc, 'Տեսաձայնագրություն', observation.recordingLink);
-    drawSection(doc, 'Ուժեղ կողմեր', observation.strengths);
-    drawSection(doc, 'Աջակցության կարիք ունեցող ուղղություններ', observation.areasForGrowth);
+    doc.moveDown(0.4);
 
-    doc.fontSize(12).font('Body-Bold').text('Կարողունակությունների գնահատում');
+    drawFlatRubric(doc, 'Ա. Դասապլանի և դասի ընդհանուր պլանավորման դիտարկում', observation.planningRubric);
+
+    doc.fontSize(13).font('Body-Bold').text('Բ. Դասալսման ընթացքում իրական ժամանակի ժրոնիկոն');
     doc.moveDown(0.3);
-    (observation.competencyScores || []).forEach((c) => {
-      doc
-        .fontSize(11)
-        .font('Body')
-        .text(`• ${c.competency}: ${c.score}/5${c.notes ? ` — ${c.notes}` : ''}`);
+    (observation.timeline || []).forEach((row) => {
+      doc.fontSize(11).font('Body-Bold').text(row.phase);
+      doc.fontSize(10.5).font('Body').text(`Ուսուցիչ-առաջնորդի գործողություններ՝ ${row.teacherActions || '—'}`);
+      doc.fontSize(10.5).font('Body').text(`Աշակերտի գործողություններ՝ ${row.studentActions || '—'}`);
+      doc.fontSize(10.5).font('Body').text(`Հարցեր / դիտարկումներ՝ ${row.questionsObservations || '—'}`);
+      doc.moveDown(0.4);
     });
-    doc.moveDown(0.5);
-    doc.fontSize(11).font('Body-Bold').text(`Ընդհանուր գնահատական՝ ${observation.overallScore ?? '—'}/5`);
-    doc.moveDown(0.8);
+    doc.moveDown(0.4);
 
-    drawSection(doc, 'Երաշանավորություններ', observation.recommendations);
+    drawTeachingRubric(
+      doc,
+      'Գ. Դասավանդման Ընդհանուր Ակնկալիքների Գնահատման Բաղադրիչներ',
+      observation.teachingRubric
+    );
+
+    doc.fontSize(13).font('Body-Bold').text('Դ. Քոուչինգի և Վերլուծական Զրույցի Բաժին');
+    doc.moveDown(0.3);
+    const coaching = observation.coaching || {};
+    drawSection(doc, 'Ինչպե՞ս է զգացել դասի սկզբում', coaching.feltAtStart);
+    drawSection(doc, 'Ինքնանդրադարձի ներկայացում ՈՒԱ-ի կողմից', coaching.selfReflectionSummary);
+    drawSection(doc, 'Դասի ընթացքում նկատված ուժեղ կողմերը', coaching.strengthsObserved);
+    drawSection(doc, 'Դասի ընթացքում նկատված բարելավող կողմեր', coaching.improvementsObserved);
+    drawSection(doc, 'Հարցեր ուսուցչին իր բարելավող կողմերը վերլուծելու համար', coaching.questionsForTeacher);
+    drawSection(doc, 'Գործնական աշխատանքի իրականացում ըստ բարելավման ուղղությունների', coaching.practicalWorkPlan);
+    drawSection(doc, 'ՈՒԱ-ի զգացողության ստուգում (խոսակցության ավարտին)', coaching.feltAtEnd);
+
+    doc.fontSize(11.5).font('Body-Bold').text('Հաջորդիվ դասերի համար սահմանված նպատակներ/քայլեր');
+    doc.moveDown(0.2);
+    (coaching.goals || []).forEach((g, i) => {
+      doc.fontSize(10.5).font('Body-Bold').text(`Նպատակ ${i + 1}. ${g.goal || '—'}`);
+      doc.fontSize(10.5).font('Body').text(`Քայլեր/գործողություններ՝ ${g.steps || '—'}`);
+      doc.moveDown(0.3);
+    });
+    drawSection(doc, 'Անհրաժեշտ ռեսուրսներ և ուղղորդումներ', coaching.resourcesAndGuidance);
+    doc.moveDown(0.4);
+
+    drawFlatRubric(doc, 'Ե. Ընդհանուր դիտարկումներ', observation.overallExpectations);
+
+    doc
+      .fontSize(13)
+      .font('Body-Bold')
+      .text(`Դասապլանի, դասավանդման և ընդհանուր դիտարկումների ընդհանուր միջին՝ ${observation.grandAverage ?? '—'}/5`);
   });
 
 /**

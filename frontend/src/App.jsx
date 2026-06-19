@@ -10,7 +10,6 @@ import ReflectionForm from './pages/TeacherDashboard/ReflectionForm.jsx';
 import ObservationForm from './pages/LDMDashboard/ObservationForm.jsx';
 import CompetencyMatrix from './pages/LDMDashboard/CompetencyMatrix.jsx';
 import LeadershipChat from './pages/LDMDashboard/LeadershipChat.jsx';
-import AiDiary from './pages/LDMDashboard/AiDiary.jsx';
 import UserManagement from './pages/AdminDashboard/UserManagement.jsx';
 
 /** Generic post-login landing — sends each role to its main work area. */
@@ -72,15 +71,6 @@ export default function App() {
             element={
               <ProtectedRoute roles={['ldm', 'admin']}>
                 <LeadershipChat />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/ldm/ai-diary"
-            element={
-              <ProtectedRoute roles={['ldm', 'admin']}>
-                <AiDiary />
               </ProtectedRoute>
             }
           />

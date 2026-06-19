@@ -8,18 +8,36 @@ const emptyDraft = () =>
   COMPETENCY_CATEGORIES.map((cat) => ({
     key: cat.key,
     name: cat.name,
-    rows: cat.competencies.map((name) => ({ name, score: '', notes: '' })),
+    rows: cat.competencies.map((name) => ({ name, score: '', notes: '', aiRationale: '' })),
+  }));
+
+// Pre-fills the editable draft from the live matrix (latest saved scores +
+// any notes already pushed in from the manifestation chat), so nothing the
+// LDM or the chat already entered is lost or hidden from the editor.
+const draftFromMatrix = (matrix) =>
+  matrix.categories.map((cat) => ({
+    key: cat.key,
+    name: cat.name,
+    rows: cat.rows.map((row) => ({
+      name: row.name,
+      score: row.score === null || row.score === undefined ? '' : String(row.score),
+      notes: row.notes || '',
+      aiRationale: '',
+    })),
   }));
 
 export default function CompetencyMatrix() {
   const [teachers, setTeachers] = useState([]);
   const [teacherId, setTeacherId] = useState('');
   const [matrix, setMatrix] = useState(null);
+  const [matrixPeriod, setMatrixPeriod] = useState(null);
   const [evaluations, setEvaluations] = useState([]);
   const [period, setPeriod] = useState('');
   const [draft, setDraft] = useState(emptyDraft());
   const [loading, setLoading] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     axiosClient
@@ -31,7 +49,9 @@ export default function CompetencyMatrix() {
   const loadTeacherData = async (id) => {
     if (!id) {
       setMatrix(null);
+      setMatrixPeriod(null);
       setEvaluations([]);
+      setDraft(emptyDraft());
       return;
     }
     const [matrixRes, evalRes] = await Promise.all([
@@ -39,7 +59,9 @@ export default function CompetencyMatrix() {
       axiosClient.get('/ldm/evaluations', { params: { teacher: id } }),
     ]);
     setMatrix(matrixRes.data.matrix);
+    setMatrixPeriod(matrixRes.data.period);
     setEvaluations(evalRes.data.evaluations);
+    setDraft(matrixRes.data.matrix ? draftFromMatrix(matrixRes.data.matrix) : emptyDraft());
   };
 
   useEffect(() => {
@@ -51,9 +73,59 @@ export default function CompetencyMatrix() {
       cats.map((cat, ci) =>
         ci !== catIndex
           ? cat
-          : { ...cat, rows: cat.rows.map((row, ri) => (ri !== rowIndex ? row : { ...row, [field]: value })) }
+          : {
+              ...cat,
+              rows: cat.rows.map((row, ri) =>
+                ri !== rowIndex ? row : { ...row, [field]: value, ...(field === 'score' ? { aiRationale: '' } : {}) }
+              ),
+            }
       )
     );
+  };
+
+  const handleRefresh = async () => {
+    setError('');
+    setNotice('');
+    try {
+      await loadTeacherData(teacherId);
+      setNotice('Մատրիցան թարմացվեց՝ ներառյալ չատից եկած նոր մեկնաբանությունները');
+    } catch (err) {
+      setError('Չհաջողվեց թարմացնել տվյալները');
+    }
+  };
+
+  const handleSuggestScores = async () => {
+    if (!teacherId) return;
+    setSuggestLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const competencies = draft.flatMap((cat) => cat.rows).map((row) => ({ name: row.name, notes: row.notes }));
+      const { data } = await axiosClient.post('/ai/competencies/suggest-scores', {
+        teacher: teacherId,
+        competencies,
+      });
+      const suggestions = data.suggestions || [];
+      if (suggestions.length === 0) {
+        setNotice('Գնահատելու համար անհրաժեշտ է գոնե մեկ տողում մեկնաբանություն');
+      } else {
+        setDraft((cats) =>
+          cats.map((cat) => ({
+            ...cat,
+            rows: cat.rows.map((row) => {
+              const s = suggestions.find((x) => x.name === row.name);
+              if (!s || s.score === null || s.score === undefined) return row;
+              return { ...row, score: String(s.score), aiRationale: s.rationale || '' };
+            }),
+          }))
+        );
+        setNotice('AI-ի առաջարկած գնահատականները լրացվեցին․ կարող եք ուղղել ցանկացած տող ուղարկելուց առաջ');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Չհաջողվեց ստանալ AI գնահատականները');
+    } finally {
+      setSuggestLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -74,10 +146,10 @@ export default function CompetencyMatrix() {
 
     setLoading(true);
     setError('');
+    setNotice('');
     try {
       await axiosClient.post('/ldm/evaluations', { teacher: teacherId, period, competencies });
       setPeriod('');
-      setDraft(emptyDraft());
       await loadTeacherData(teacherId);
     } catch (err) {
       setError(err.response?.data?.message || 'Չհաջողվեց պահպանել գնահատումը');
@@ -93,7 +165,7 @@ export default function CompetencyMatrix() {
         <p className="muted">
           18 հաստատագրված կարողունակություն, խմբավորված 5 կատեգորիայով, 0-5 սանդղակով։ Տես նաև{' '}
           <Link to="/ldm/chat">դրսևորումների AI չատը</Link>, որտեղ մուտքագրած պահվածքները ինքնաբերաբար
-          կդասակարգվեն այս կարողունակություններում։
+          կդասակարգվեն և կհայտնվեն ստորև համապատասխան կարողունակության մեկնաբանության դաշտում։
         </p>
         <label>
           <span>Ուսուցիչ</span>
@@ -106,11 +178,16 @@ export default function CompetencyMatrix() {
             ))}
           </select>
         </label>
+        {teacherId && (
+          <button type="button" onClick={handleRefresh} disabled={loading}>
+            Թարմացնել (բեռնել չատի նոր մեկնաբանությունները)
+          </button>
+        )}
 
         {teacherId && matrix && (
           <>
             <p className="muted">
-              Վերջին գնահատման ժամանակահատվածը՝ {matrix.period || '—'} ({matrix.completed}/{matrix.total}{' '}
+              Վերջին գնահատման ժամանակահատվածը՝ {matrixPeriod || '—'} ({matrix.completed}/{matrix.total}{' '}
               կարողունակություն գնահատված)
             </p>
             {matrix.categories.map((cat) => (
@@ -131,7 +208,7 @@ export default function CompetencyMatrix() {
                       <tr key={row.name}>
                         <td>{row.name}</td>
                         <td>{row.score ?? '—'}/5</td>
-                        <td>{row.notes || '—'}</td>
+                        <td style={{ whiteSpace: 'pre-wrap' }}>{row.notes || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -148,6 +225,10 @@ export default function CompetencyMatrix() {
           <h3>Նոր գնահատում</h3>
           <p className="muted">
             Սանդղակ՝ {SCORE_SCALE.map((s) => `${s.value}=${s.label}`).join(', ')}
+          </p>
+          <p className="muted form-section-hint">
+            Գնահատականները կարող են AI-ի կողմից առաջարկվել ըստ մեկնաբանությունների, սակայն մնում են ձեռքով
+            խմբագրելի՝ պահպանելուց առաջ։
           </p>
           <form onSubmit={handleSubmit}>
             <label>
@@ -180,10 +261,12 @@ export default function CompetencyMatrix() {
                           </option>
                         ))}
                       </select>
+                      {row.aiRationale && <p className="muted ai-rationale">AI հիմնավորում՝ {row.aiRationale}</p>}
                     </label>
                     <label>
                       <span>Մեկնաբանություն</span>
-                      <input
+                      <textarea
+                        rows={2}
                         value={row.notes}
                         onChange={(e) => updateDraftRow(ci, ri, 'notes', e.target.value)}
                       />
@@ -194,9 +277,15 @@ export default function CompetencyMatrix() {
             ))}
 
             {error && <p className="error-text">{error}</p>}
-            <button type="submit" disabled={loading}>
-              {loading ? 'Պահպանվում է...' : 'Պահպանել գնահատումը'}
-            </button>
+            {notice && <p className="muted">{notice}</p>}
+            <div className="competency-row" style={{ alignItems: 'flex-start' }}>
+              <button type="submit" disabled={loading}>
+                {loading ? 'Պահպանվում է...' : 'Պահպանել գնահատումը'}
+              </button>
+              <button type="button" onClick={handleSuggestScores} disabled={suggestLoading || loading}>
+                {suggestLoading ? 'Գնահատվում է...' : 'Գնահատել ըստ մեկնաբանությունների'}
+              </button>
+            </div>
           </form>
         </div>
       )}

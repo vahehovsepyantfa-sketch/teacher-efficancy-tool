@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { teachingRubricSchema, goalStepSchema } = require('./schemas/sharedSchemas');
 
 const teacherReflectionSchema = new mongoose.Schema(
   {
@@ -7,44 +8,43 @@ const teacherReflectionSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
-    date: {
-      type: Date,
-      default: Date.now,
-    },
-    content: {
-      type: String,
-      required: [true, 'Reflection content is required'],
-      trim: true,
-    },
-    // How the reflection was captured: typed directly, or via the
-    // VoiceToTextButton component on the frontend.
+    date: { type: Date, default: Date.now },
+
+    // --- Header / lesson identification (spec Module 1 field table) ---
+    academicYear: { type: String, trim: true, default: '' },
+    subject: { type: String, trim: true, default: '' },
+    topic: { type: String, trim: true, default: '' },
+    grade: { type: String, trim: true, default: '' },
+    studentsCount: { type: Number, default: null },
+    lessonPlanLink: { type: String, trim: true, default: '' },
+    recordingLink: { type: String, trim: true, default: '' },
+
+    // --- Pre-discussion reflection prompts (Rich Text + Voice-to-Text) ---
+    successfulDirections: { type: String, trim: true, default: '' },
+    previousGoalsProgress: { type: String, trim: true, default: '' },
+
+    // --- "ՈՒԱ լրացման դաշտեր": teacher's self-rating using the shared
+    // teaching-expectations rubric (same rubric the LDM independently
+    // fills in Module 2 section Գ for the same lesson). ---
+    selfRubric: { type: teachingRubricSchema, default: () => ({}) },
+
+    // --- Goals/steps the teacher proposes going into the coaching
+    // conversation (finalized jointly in the LessonObservation's
+    // coaching section). ---
+    goals: { type: [goalStepSchema], default: () => [{}, {}, {}] },
+
+    // Free-text field kept for backwards compatibility / quick capture;
+    // mirrors the legacy "content" field.
+    content: { type: String, trim: true, default: '' },
+
     inputMethod: {
       type: String,
       enum: ['text', 'voice'],
       default: 'text',
     },
-    // Official spec scale: 0-5 self-rating of how the day/lesson went.
-    moodRating: {
-      type: Number,
-      min: 0,
-      max: 5,
-      default: null,
-    },
-    // Required links per spec Module 1 ("Դասի պլանի հղում" / "Դասի ձայնագրության հղում").
-    lessonPlanLink: { type: String, trim: true, default: '' },
-    recordingLink: { type: String, trim: true, default: '' },
-    subject: { type: String, trim: true, default: '' },
-    grade: { type: String, trim: true, default: '' },
-    studentsCount: { type: Number, default: null },
-    // "What worked well" / "progress on previous goals" — spec's named
-    // reflection prompts, each fillable via voice-to-text.
-    successfulDirections: { type: String, trim: true, default: '' },
-    previousGoalsProgress: { type: String, trim: true, default: '' },
+
     // AI-generated coaching feedback for this reflection (see aiController).
-    aiFeedback: {
-      type: String,
-      default: '',
-    },
+    aiFeedback: { type: String, default: '' },
   },
   { timestamps: true }
 );

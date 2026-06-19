@@ -1,10 +1,9 @@
 const express = require('express');
 const {
   generateFeedbackForReflection,
-  generateTeacherDiary,
-  listTeacherDiary,
   classifyManifestation,
   listManifestations,
+  suggestScores,
 } = require('../controllers/aiController');
 const { protect } = require('../middlewares/authMiddleware');
 const { allowRoles } = require('../middlewares/roleMiddleware');
@@ -17,13 +16,14 @@ router.use(protect);
 // itself checks that they own it (or are an ldm/admin).
 router.post('/reflections/:id/feedback', generateFeedbackForReflection);
 
-// Diary generation/viewing is an LDM/admin coaching tool.
-router.post('/diary', allowRoles('ldm', 'admin'), generateTeacherDiary);
-router.get('/diary', allowRoles('ldm', 'admin'), listTeacherDiary);
-
 // Manifestation-sorting chat: type one observed behavior, AI classifies it
-// into one of the 18 fixed leadership competencies.
+// into one of the 18 fixed leadership competencies and lands it in that
+// competency's notes field on the Competency Matrix.
 router.post('/manifestations', allowRoles('ldm', 'admin'), classifyManifestation);
 router.get('/manifestations', allowRoles('ldm', 'admin'), listManifestations);
+
+// Competency Matrix: AI suggests a 0-5 score for every row that already
+// has notes/comments, staying manually editable afterward.
+router.post('/competencies/suggest-scores', allowRoles('ldm', 'admin'), suggestScores);
 
 module.exports = router;

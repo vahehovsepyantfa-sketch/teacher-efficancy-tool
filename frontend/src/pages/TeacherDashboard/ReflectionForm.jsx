@@ -1,177 +1,280 @@
 import { useEffect, useState } from 'react';
 import axiosClient from '../../api/axiosClient';
 import VoiceToTextButton from '../../components/UI/VoiceToTextButton';
-import { SCORE_SCALE } from '../../constants/competencyFramework';
+import PdfExportButton from '../../components/UI/PdfExportButton';
+import { TeachingRubricEditor } from '../../components/UI/RubricEditor';
+import { emptyTeachingRubric, emptyGoals } from '../../constants/teachingRubric';
 
-const emptyForm = {
-  content: '',
-  moodRating: 3,
+const emptyHeader = {
+  academicYear: '',
   subject: '',
+  topic: '',
   grade: '',
   studentsCount: '',
   lessonPlanLink: '',
   recordingLink: '',
-  successfulDirections: '',
-  previousGoalsProgress: '',
 };
 
 export default function ReflectionForm() {
-  const [form, setForm] = useState(emptyForm);
+  const [header, setHeader] = useState(emptyHeader);
+  const [successfulDirections, setSuccessfulDirections] = useState('');
+  const [previousGoalsProgress, setPreviousGoalsProgress] = useState('');
+  const [selfRubric, setSelfRubric] = useState(emptyTeachingRubric());
+  const [goals, setGoals] = useState(emptyGoals());
   const [inputMethod, setInputMethod] = useState('text');
+
   const [reflections, setReflections] = useState([]);
+  const [observations, setObservations] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [feedbackLoadingId, setFeedbackLoadingId] = useState(null);
   const [error, setError] = useState('');
 
-  const loadReflections = async () => {
-    const { data } = await axiosClient.get('/teacher/reflections');
-    setReflections(data.reflections);
+  const loadAll = async () => {
+    const [reflRes, obsRes] = await Promise.all([
+      axiosClient.get('/teacher/reflections'),
+      axiosClient.get('/teacher/observations'),
+    ]);
+    setReflections(reflRes.data.reflections);
+    setObservations(obsRes.data.observations);
   };
 
   useEffect(() => {
-    loadReflections().catch(() => setError('Չհաջողվեց բեռնել ինքնավերլուծությունները'));
+    loadAll().catch(() => setError('Չհաջողվեց բեռնել տվյալները'));
   }, []);
 
-  const updateField = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const updateHeader = (field, value) => setHeader((h) => ({ ...h, [field]: value }));
 
-  const handleVoiceTranscript = (text) => {
-    setInputMethod('voice');
-    updateField('content', form.content ? `${form.content} ${text}` : text);
+  const updateGoalRow = (index, field, value) =>
+    setGoals((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+
+  const resetForm = () => {
+    setHeader(emptyHeader);
+    setSuccessfulDirections('');
+    setPreviousGoalsProgress('');
+    setSelfRubric(emptyTeachingRubric());
+    setGoals(emptyGoals());
+    setInputMethod('text');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.content.trim()) return;
+    if (!header.lessonPlanLink.trim() || !header.recordingLink.trim()) {
+      setError('Դասի պլանի հղումը և տեսաձայնագրության հղումը պարտադիր են');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       await axiosClient.post('/teacher/reflections', {
-        ...form,
-        moodRating: Number(form.moodRating),
-        studentsCount: form.studentsCount ? Number(form.studentsCount) : undefined,
+        ...header,
+        studentsCount: header.studentsCount ? Number(header.studentsCount) : undefined,
+        successfulDirections,
+        previousGoalsProgress,
+        selfRubric,
+        goals,
         inputMethod,
       });
-      setForm(emptyForm);
-      setInputMethod('text');
-      await loadReflections();
+      resetForm();
+      await loadAll();
     } catch (err) {
-      setError(err.response?.data?.message || 'Չհաջողվեց պահպանել ինքնավերլուծությունը');
+      setError(err.response?.data?.message || 'Չհաջողվեց պահպանել ինքնանդրադարձը');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const requestFeedback = async (id) => {
-    setFeedbackLoadingId(id);
-    try {
-      await axiosClient.post(`/ai/reflections/${id}/feedback`);
-      await loadReflections();
-    } catch {
-      setError('Չհաջողվեց ստանալ AI հետադարձ կապ');
-    } finally {
-      setFeedbackLoadingId(null);
     }
   };
 
   return (
     <div>
       <div className="card">
-        <h2>Օրական ինքնավերլուծություն</h2>
+        <h2>Ուսուցչի ինքնանդրադարձ (ՈՒԱ)</h2>
         <form onSubmit={handleSubmit}>
-          <label>
-            <span>Ինչպես անցավ դասը: Ի՞նչ ստացվեց, ի՞նչ էր դժվար, ի՞նչ կփորձես վաղը</span>
-            <textarea
-              rows={5}
-              value={form.content}
-              onChange={(e) => {
-                setInputMethod('text');
-                updateField('content', e.target.value);
-              }}
-              required
-            />
-          </label>
-
-          <div className="competency-row">
+          <div className="form-section">
+            <h3>ՈՒԱ լրացման դաշտեր</h3>
+            <div className="competency-row">
+              <label>
+                <span>Ուսումնական տարի</span>
+                <input value={header.academicYear} onChange={(e) => updateHeader('academicYear', e.target.value)} />
+              </label>
+              <label>
+                <span>Առարկա</span>
+                <input value={header.subject} onChange={(e) => updateHeader('subject', e.target.value)} />
+              </label>
+              <label>
+                <span>Թեմա</span>
+                <input value={header.topic} onChange={(e) => updateHeader('topic', e.target.value)} />
+              </label>
+            </div>
+            <div className="competency-row">
+              <label>
+                <span>Դասարան</span>
+                <input value={header.grade} onChange={(e) => updateHeader('grade', e.target.value)} />
+              </label>
+              <label>
+                <span>Աշակերտների քանակ</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={header.studentsCount}
+                  onChange={(e) => updateHeader('studentsCount', e.target.value)}
+                />
+              </label>
+              <span />
+            </div>
             <label>
-              <span>Առարկա</span>
-              <input value={form.subject} onChange={(e) => updateField('subject', e.target.value)} />
-            </label>
-            <label>
-              <span>Դասարան</span>
-              <input value={form.grade} onChange={(e) => updateField('grade', e.target.value)} />
-            </label>
-            <label>
-              <span>Աշակերտների քանակ</span>
+              <span>Դասի պլանի հղում (Պարտադիր)</span>
               <input
-                type="number"
-                min={0}
-                value={form.studentsCount}
-                onChange={(e) => updateField('studentsCount', e.target.value)}
+                value={header.lessonPlanLink}
+                onChange={(e) => updateHeader('lessonPlanLink', e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              <span>Տեսաձայնագրության հղում (Պարտադիր)</span>
+              <input
+                value={header.recordingLink}
+                onChange={(e) => updateHeader('recordingLink', e.target.value)}
+                required
               />
             </label>
           </div>
 
-          <label>
-            <span>Դասի պլանի հղում (ոչ պարտադիր)</span>
-            <input value={form.lessonPlanLink} onChange={(e) => updateField('lessonPlanLink', e.target.value)} />
-          </label>
-          <label>
-            <span>Տեսաձայնագրության հղում (ոչ պարտադիր)</span>
-            <input value={form.recordingLink} onChange={(e) => updateField('recordingLink', e.target.value)} />
-          </label>
-          <label>
-            <span>Հաջողված ուղղություններ</span>
-            <textarea
-              rows={3}
-              value={form.successfulDirections}
-              onChange={(e) => updateField('successfulDirections', e.target.value)}
-            />
-          </label>
-          <label>
-            <span>Նախորդ նպատակների հասանելիություն</span>
-            <textarea
-              rows={3}
-              value={form.previousGoalsProgress}
-              onChange={(e) => updateField('previousGoalsProgress', e.target.value)}
-            />
-          </label>
-
-          <label>
-            <span>
-              Ինքնագնահատում՝ {form.moodRating}/5 —{' '}
-              {SCORE_SCALE.find((s) => s.value === Number(form.moodRating))?.label}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={5}
-              value={form.moodRating}
-              onChange={(e) => updateField('moodRating', e.target.value)}
-            />
-          </label>
-
-          <div style={{ marginBottom: '0.9rem' }}>
-            <VoiceToTextButton onTranscript={handleVoiceTranscript} />
+          <div className="form-section">
+            <h3>Ինքնանդրադարձի հարցեր</h3>
+            <label>
+              <span>Ո՞ր ուղղություններով դասը հաջողված էր</span>
+              <textarea
+                rows={3}
+                value={successfulDirections}
+                onChange={(e) => {
+                  setInputMethod('text');
+                  setSuccessfulDirections(e.target.value);
+                }}
+              />
+              <VoiceToTextButton
+                onTranscript={(text) => {
+                  setInputMethod('voice');
+                  setSuccessfulDirections((v) => (v ? `${v} ${text}` : text));
+                }}
+              />
+            </label>
+            <label>
+              <span>Որքանո՞վ առաջադիմեցիք նախորդ նպատակների շրջանակում</span>
+              <textarea
+                rows={3}
+                value={previousGoalsProgress}
+                onChange={(e) => {
+                  setInputMethod('text');
+                  setPreviousGoalsProgress(e.target.value);
+                }}
+              />
+              <VoiceToTextButton
+                onTranscript={(text) => {
+                  setInputMethod('voice');
+                  setPreviousGoalsProgress((v) => (v ? `${v} ${text}` : text));
+                }}
+              />
+            </label>
           </div>
+
+          <div className="form-section">
+            <h3>Ինքնագնահատում՝ Դասավանդման Ընդհանուր Ակնկալիքների Բաղադրիչներով</h3>
+            <p className="muted form-section-hint">
+              Գնահատեք ձեր դասը ըստ ստորև ներկայացված բաղադրիչների (0-5 սանդղակ)։
+            </p>
+            <TeachingRubricEditor value={selfRubric} onChange={setSelfRubric} />
+          </div>
+
+          <div className="form-section">
+            <h3>Նպատակի և նպատակին հասնելու գործողությունների սահմանում</h3>
+            <p className="muted form-section-hint">
+              Սահմանվում է ՈՒԱ-ի հետ համատեղ՝ լրացրեք ներքևում։
+            </p>
+            <table className="goals-table">
+              <thead>
+                <tr>
+                  <th>Նպատակ</th>
+                  <th>Հասնելու քայլեր</th>
+                </tr>
+              </thead>
+              <tbody>
+                {goals.map((row, i) => (
+                  <tr key={i}>
+                    <td>
+                      <textarea value={row.goal} onChange={(e) => updateGoalRow(i, 'goal', e.target.value)} />
+                    </td>
+                    <td>
+                      <textarea value={row.steps} onChange={(e) => updateGoalRow(i, 'steps', e.target.value)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {error && <p className="error-text">{error}</p>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Պահպանվում է...' : 'Պահպանել ինքնավերլուծությունը'}
+            {loading ? 'Պահպանվում է...' : 'Պահպանել ինքնանդրադարձը'}
           </button>
         </form>
       </div>
 
       <div className="card">
-        <h3>Նախորդ ինքնավերլուծությունները</h3>
-        {reflections.length === 0 && <p className="muted">Դեռևս ինքնավերլուծություն չկա։</p>}
+        <h3>Իմ դասի վերլուծություն</h3>
+        <p className="muted form-section-hint">
+          Այստեղ կհայտնվեն ԱԶՂ-ի կողմից ուղարկված դասի դիտարկման/վերլուծության ձևաթղթերը։
+        </p>
+        {observations.length === 0 && <p className="muted">Դեռևս ուղարկված դիտարկում չկա։</p>}
+        {observations.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Ամսաթիվ</th>
+                <th>ԱԶՂ</th>
+                <th>Առարկա / Դասարան</th>
+                <th>Ընդհանուր միջին</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {observations.map((o) => (
+                <tr key={o._id}>
+                  <td>{new Date(o.date).toLocaleDateString('hy-AM')}</td>
+                  <td>{o.ldm?.name || '—'}</td>
+                  <td>
+                    {o.subject || '—'} / {o.grade || '—'}
+                  </td>
+                  <td>
+                    <span className="score-pill">{o.grandAverage ?? '—'}/5</span>
+                  </td>
+                  <td>
+                    <PdfExportButton
+                      endpoint={`/teacher/observations/${o._id}/pdf`}
+                      filename={`observation-${o._id}.pdf`}
+                      label="PDF"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>Նախորդ ինքնանդրադարձները</h3>
+        {reflections.length === 0 && <p className="muted">Դեռևս ինքնանդրադարձ չկա։</p>}
         {reflections.map((r) => (
           <div key={r._id} className="card" style={{ background: '#fafbfc' }}>
             <p className="muted">
-              {new Date(r.date).toLocaleDateString('hy-AM')} · ինքնագնահատում {r.moodRating ?? '—'}/5 ·{' '}
-              {r.inputMethod === 'voice' ? 'ձայնային' : 'տեքստային'}
+              {new Date(r.date).toLocaleDateString('hy-AM')}
               {r.subject ? ` · ${r.subject}` : ''}
-              {r.grade ? ` / ${r.grade}` : ''}
+              {r.topic ? ` · ${r.topic}` : ''}
+              {r.grade ? ` · ${r.grade}` : ''}
+              {' · '}
+              {r.inputMethod === 'voice' ? 'ձայնային' : 'տեքստային'}
             </p>
-            <p>{r.content}</p>
+            <p>
+              <strong>Ինքնագնահատման ամփոփիչ միավոր՝</strong> {r.selfRubric?.overallAverage ?? '—'}/5
+            </p>
             {r.successfulDirections && (
               <p>
                 <strong>Հաջողված ուղղություններ՝</strong> {r.successfulDirections}
@@ -195,20 +298,6 @@ export default function ReflectionForm() {
                   Տեսաձայնագրություն
                 </a>
               </p>
-            )}
-            {r.aiFeedback ? (
-              <p>
-                <strong>AI մարզչական հետադարձ կապ՝</strong> {r.aiFeedback}
-              </p>
-            ) : (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => requestFeedback(r._id)}
-                disabled={feedbackLoadingId === r._id}
-              >
-                {feedbackLoadingId === r._id ? 'Ստեղծվում է...' : 'Ստանալ AI հետադարձ կապ'}
-              </button>
             )}
           </div>
         ))}

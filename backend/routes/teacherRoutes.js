@@ -4,6 +4,7 @@ const {
   createReflection,
   listMyReflections,
   listMyObservations,
+  getObservationPdf,
   listMyEvaluations,
 } = require('../controllers/teacherController');
 const { protect } = require('../middlewares/authMiddleware');
@@ -18,6 +19,7 @@ router.get('/me', getProfile);
 router.post('/reflections', createReflection);
 router.get('/reflections', listMyReflections);
 router.get('/observations', listMyObservations);
+router.get('/observations/:id/pdf', getObservationPdf);
 router.get('/evaluations', listMyEvaluations);
 
 module.exports = router;

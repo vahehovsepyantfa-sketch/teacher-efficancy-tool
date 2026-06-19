@@ -1,11 +1,18 @@
 const LessonObservation = require('../models/LessonObservation');
 const CompetencyEvaluation = require('../models/CompetencyEvaluation');
-const DailyNote = require('../models/DailyNote');
 const TeacherReflection = require('../models/TeacherReflection');
 const User = require('../models/User');
 const { computeEntriesAverage } = require('../utils/mathCalculations');
 const { buildCategorizedMatrix, ALL_COMPETENCIES } = require('../utils/competencyFramework');
 const { generateObservationPdf, generateEvaluationPdf } = require('../services/pdfGeneratorService');
+const {
+  computePlanningRubric,
+  computeTeachingRubric,
+  computeOverallExpectationsRubric,
+  computeGrandAverage,
+  normalizeTimeline,
+  normalizeGoals,
+} = require('../utils/observationRubrics');
 
 /**
  * GET /api/ldm/teachers
@@ -46,26 +53,30 @@ const getTeacherReflections = async (req, res) => {
 
 /**
  * POST /api/ldm/observations
+ * Saves (creates or, if `id` is given, updates) a lesson observation draft.
+ * Sections Ա-Ե are each run through their respective rubric normalizer so
+ * partial/out-of-order client submissions still compute clean averages.
+ * Does NOT make the observation visible to the teacher — see sendObservation.
  */
 const createObservation = async (req, res) => {
   try {
     const {
+      id,
       teacher,
       date,
       subject,
       grade,
       lessonPlanLink,
       recordingLink,
-      strengths,
-      areasForGrowth,
-      competencyScores,
-      recommendations,
+      planningRubric,
+      timeline,
+      teachingRubric,
+      coaching,
+      overallExpectations,
     } = req.body;
 
-    if (!teacher || !Array.isArray(competencyScores) || competencyScores.length === 0) {
-      return res
-        .status(400)
-        .json({ message: 'teacher and at least one competencyScores entry are required' });
+    if (!teacher) {
+      return res.status(400).json({ message: 'teacher is required' });
     }
 
     const allowed = await assertCanAccessTeacher(req, teacher);
@@ -73,26 +84,71 @@ const createObservation = async (req, res) => {
       return res.status(403).json({ message: 'This teacher is not assigned to you' });
     }
 
-    const overallScore = computeEntriesAverage(competencyScores);
+    const computedPlanning = computePlanningRubric(planningRubric);
+    const computedTeaching = computeTeachingRubric(teachingRubric);
+    const computedOverallExpectations = computeOverallExpectationsRubric(overallExpectations);
+    const grandAverage = computeGrandAverage(
+      computedPlanning.overallAverage,
+      computedTeaching.overallAverage,
+      computedOverallExpectations.overallAverage
+    );
 
-    const observation = await LessonObservation.create({
+    // Read-only convenience copy of the teacher's latest shared links, so
+    // the LDM can open them from the observation form/PDF without leaving
+    // the page. Falls back to whatever the client sent.
+    let resolvedLessonPlanLink = lessonPlanLink || '';
+    let resolvedRecordingLink = recordingLink || '';
+    if (!resolvedLessonPlanLink || !resolvedRecordingLink) {
+      const latestReflection = await TeacherReflection.findOne({ teacher }).sort({ date: -1 });
+      if (latestReflection) {
+        resolvedLessonPlanLink = resolvedLessonPlanLink || latestReflection.lessonPlanLink || '';
+        resolvedRecordingLink = resolvedRecordingLink || latestReflection.recordingLink || '';
+      }
+    }
+
+    const payload = {
       ldm: req.user._id,
       teacher,
       date: date || Date.now(),
       subject,
       grade,
-      lessonPlanLink,
-      recordingLink,
-      strengths,
-      areasForGrowth,
-      competencyScores,
-      overallScore,
-      recommendations,
-    });
+      lessonPlanLink: resolvedLessonPlanLink,
+      recordingLink: resolvedRecordingLink,
+      planningRubric: computedPlanning,
+      timeline: normalizeTimeline(timeline),
+      teachingRubric: computedTeaching,
+      coaching: {
+        feltAtStart: coaching?.feltAtStart || '',
+        selfReflectionSummary: coaching?.selfReflectionSummary || '',
+        strengthsObserved: coaching?.strengthsObserved || '',
+        improvementsObserved: coaching?.improvementsObserved || '',
+        questionsForTeacher: coaching?.questionsForTeacher || '',
+        practicalWorkPlan: coaching?.practicalWorkPlan || '',
+        feltAtEnd: coaching?.feltAtEnd || '',
+        goals: normalizeGoals(coaching?.goals),
+        resourcesAndGuidance: coaching?.resourcesAndGuidance || '',
+      },
+      overallExpectations: computedOverallExpectations,
+      grandAverage,
+    };
+
+    let observation;
+    if (id) {
+      observation = await LessonObservation.findOneAndUpdate(
+        { _id: id, ldm: req.user.role === 'admin' ? { $exists: true } : req.user._id },
+        payload,
+        { new: true }
+      );
+      if (!observation) {
+        return res.status(404).json({ message: 'Observation not found' });
+      }
+    } else {
+      observation = await LessonObservation.create(payload);
+    }
 
     res.status(201).json({ observation });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to create observation', error: err.message });
+    res.status(500).json({ message: 'Failed to save observation', error: err.message });
   }
 };
 
@@ -108,6 +164,47 @@ const listObservations = async (req, res) => {
     .sort({ date: -1 });
 
   res.json({ observations });
+};
+
+/**
+ * GET /api/ldm/observations/:id
+ */
+const getObservation = async (req, res) => {
+  const observation = await LessonObservation.findById(req.params.id)
+    .populate('teacher', 'name email')
+    .populate('ldm', 'name email');
+
+  if (!observation) {
+    return res.status(404).json({ message: 'Observation not found' });
+  }
+  const allowed = await assertCanAccessTeacher(req, observation.teacher._id || observation.teacher);
+  if (!allowed) {
+    return res.status(403).json({ message: 'This teacher is not assigned to you' });
+  }
+
+  res.json({ observation });
+};
+
+/**
+ * POST /api/ldm/observations/:id/send
+ * Per spec page 5: only after the LDM presses this does the observation
+ * become visible to the teacher under "Իմ դասի վերլուծություն".
+ */
+const sendObservation = async (req, res) => {
+  const observation = await LessonObservation.findById(req.params.id);
+  if (!observation) {
+    return res.status(404).json({ message: 'Observation not found' });
+  }
+  const allowed = await assertCanAccessTeacher(req, observation.teacher);
+  if (!allowed) {
+    return res.status(403).json({ message: 'This teacher is not assigned to you' });
+  }
+
+  observation.sent = true;
+  observation.sentAt = new Date();
+  await observation.save();
+
+  res.json({ observation });
 };
 
 /**
@@ -223,54 +320,16 @@ const getEvaluationPdf = async (req, res) => {
   res.send(pdfBuffer);
 };
 
-/**
- * POST /api/ldm/notes
- * Quick manual/voice note about a teacher — also used as one "message" in
- * the manifestation-sorting chat (see aiController.classifyManifestation).
- */
-const createNote = async (req, res) => {
-  try {
-    const { teacher, note, date, source } = req.body;
-
-    if (!note) {
-      return res.status(400).json({ message: 'note is required' });
-    }
-
-    const created = await DailyNote.create({
-      author: req.user._id,
-      teacher: teacher || null,
-      note,
-      date: date || Date.now(),
-      source: source === 'voice' ? 'voice' : 'manual',
-    });
-
-    res.status(201).json({ note: created });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to create note', error: err.message });
-  }
-};
-
-/**
- * GET /api/ldm/notes?teacher=<id>
- */
-const listNotes = async (req, res) => {
-  const filter = req.user.role === 'admin' ? {} : { author: req.user._id };
-  if (req.query.teacher) filter.teacher = req.query.teacher;
-
-  const notes = await DailyNote.find(filter).sort({ date: -1 });
-  res.json({ notes });
-};
-
 module.exports = {
   listMyTeachers,
   getTeacherReflections,
   createObservation,
   listObservations,
+  getObservation,
+  sendObservation,
   getObservationPdf,
   createEvaluation,
   listEvaluations,
   getCompetencyMatrix,
   getEvaluationPdf,
-  createNote,
-  listNotes,
 };

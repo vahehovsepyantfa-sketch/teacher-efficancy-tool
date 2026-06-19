@@ -4,7 +4,9 @@ const competencyEntrySchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     // Official spec scale: 0-5 (0 = Լիովին բացակայում է … 5 = Լիովին ապահովված է).
-    score: { type: Number, required: true, min: 0, max: 5 },
+    // Optional/null: a competency can carry notes (e.g. pushed in from the
+    // manifestation chat) before it has ever been scored.
+    score: { type: Number, default: null, min: 0, max: 5 },
     notes: { type: String, default: '', trim: true },
   },
   { _id: false }
