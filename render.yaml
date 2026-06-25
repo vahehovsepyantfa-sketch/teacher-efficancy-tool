@@ -31,7 +31,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://teacher-efficancy-tool-api.onrender.com/api
+        value: https://teacher-efficancy-tool.onrender.com/api
     routes:
       - type: rewrite
         source: /*
@@ -58,4 +58,4 @@ services:
         value: camera=(), microphone=(), geolocation=(), interest-cohort=()
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://teacher-efficancy-tool-api.onrender.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://teacher-efficancy-tool.onrender.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
