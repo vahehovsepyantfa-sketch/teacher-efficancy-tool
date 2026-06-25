@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Name is required'],
       trim: true,
+      maxlength: [100, 'Name must be 100 characters or fewer'],
     },
     email: {
       type: String,
@@ -16,6 +17,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      maxlength: [254, 'Email must be 254 characters or fewer'],
     },
     password: {
       type: String,
@@ -34,8 +36,8 @@ const userSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
-    school: { type: String, trim: true, default: '' },
-    region: { type: String, trim: true, default: '' },
+    school: { type: String, trim: true, default: '', maxlength: 100 },
+    region: { type: String, trim: true, default: '', maxlength: 100 },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

@@ -4,9 +4,9 @@ const mongoose = require('mongoose');
 const rubricRowSchema = new mongoose.Schema(
   {
     key: { type: String, default: '' },
-    label: { type: String, required: true, trim: true },
+    label: { type: String, required: true, trim: true, maxlength: 300 },
     score: { type: Number, min: 0, max: 5, default: null },
-    comment: { type: String, default: '', trim: true },
+    comment: { type: String, default: '', trim: true, maxlength: 5000 },
   },
   { _id: false }
 );
@@ -15,7 +15,7 @@ const rubricRowSchema = new mongoose.Schema(
 const rubricHeadlineSchema = new mongoose.Schema(
   {
     score: { type: Number, min: 0, max: 5, default: null },
-    comment: { type: String, default: '', trim: true },
+    comment: { type: String, default: '', trim: true, maxlength: 5000 },
   },
   { _id: false }
 );
@@ -26,7 +26,7 @@ const rubricCategorySchema = new mongoose.Schema(
     key: { type: String, required: true },
     name: { type: String, required: true },
     rows: [rubricRowSchema],
-    categoryComment: { type: String, default: '', trim: true },
+    categoryComment: { type: String, default: '', trim: true, maxlength: 5000 },
     categoryAverage: { type: Number, default: null },
   },
   { _id: false }
@@ -42,7 +42,7 @@ const teachingRubricSchema = new mongoose.Schema(
     headline: { type: rubricHeadlineSchema, default: () => ({}) },
     categories: [rubricCategorySchema],
     overallAverage: { type: Number, default: null },
-    summaryComment: { type: String, default: '', trim: true },
+    summaryComment: { type: String, default: '', trim: true, maxlength: 5000 },
   },
   { _id: false }
 );
@@ -53,7 +53,7 @@ const planningRubricSchema = new mongoose.Schema(
     headline: { type: rubricHeadlineSchema, default: () => ({}) },
     rows: [rubricRowSchema],
     overallAverage: { type: Number, default: null },
-    generalComment: { type: String, default: '', trim: true },
+    generalComment: { type: String, default: '', trim: true, maxlength: 5000 },
   },
   { _id: false }
 );
@@ -61,10 +61,10 @@ const planningRubricSchema = new mongoose.Schema(
 /** Module 2 section Բ: one row of the real-time lesson timeline matrix. */
 const timelineRowSchema = new mongoose.Schema(
   {
-    phase: { type: String, required: true, trim: true },
-    teacherActions: { type: String, default: '', trim: true },
-    studentActions: { type: String, default: '', trim: true },
-    questionsObservations: { type: String, default: '', trim: true },
+    phase: { type: String, required: true, trim: true, maxlength: 200 },
+    teacherActions: { type: String, default: '', trim: true, maxlength: 5000 },
+    studentActions: { type: String, default: '', trim: true, maxlength: 5000 },
+    questionsObservations: { type: String, default: '', trim: true, maxlength: 5000 },
   },
   { _id: false }
 );
@@ -72,8 +72,8 @@ const timelineRowSchema = new mongoose.Schema(
 /** Shared goal/step row, used by Module 1's goals table and Module 2-Դ's. */
 const goalStepSchema = new mongoose.Schema(
   {
-    goal: { type: String, default: '', trim: true },
-    steps: { type: String, default: '', trim: true },
+    goal: { type: String, default: '', trim: true, maxlength: 2000 },
+    steps: { type: String, default: '', trim: true, maxlength: 2000 },
   },
   { _id: false }
 );

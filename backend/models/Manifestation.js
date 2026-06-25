@@ -11,13 +11,13 @@ const manifestationSchema = new mongoose.Schema(
   {
     author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    period: { type: String, trim: true, default: '' },
-    text: { type: String, required: true, trim: true },
+    period: { type: String, trim: true, default: '', maxlength: 100 },
+    text: { type: String, required: true, trim: true, maxlength: 3000 },
     competency: { type: String, default: null },
     categoryKey: { type: String, default: null },
     categoryName: { type: String, default: null },
     confidence: { type: Number, default: null },
-    aiNote: { type: String, default: '' },
+    aiNote: { type: String, default: '', maxlength: 1000 },
   },
   { timestamps: true }
 );

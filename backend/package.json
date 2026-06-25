@@ -13,8 +13,11 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.24.0",
-    "pdfkit": "^0.15.2"
+    "pdfkit": "^0.15.2",
+    "sanitize-html": "^2.13.1"
   }
 }
