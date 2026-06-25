@@ -62,6 +62,20 @@ export default function UserManagement() {
     }
   };
 
+  const deleteUser = async (u) => {
+    const confirmed = window.confirm(
+      `Ջնջել «${u.name}» (${u.email}) օգտատերին ընդմիշտ։ Այս գործողությունը հնարավոր չէ հետարկել։ Շարունակել՞:`
+    );
+    if (!confirmed) return;
+    setError('');
+    try {
+      await axiosClient.delete(`/admin/users/${u._id}/permanent`);
+      await loadUsers();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Չհաջողվեց ջնջել օգտատերին');
+    }
+  };
+
   const resetPassword = async (id) => {
     const value = pwInputs[id] || '';
     if (value.length < 6) {
@@ -124,11 +138,16 @@ export default function UserManagement() {
         </div>
       </td>
       <td>
-        {u.isActive && (
-          <button type="button" className="secondary" onClick={() => deactivateUser(u._id)}>
-            Ապաակտիվացնել
+        <div className="row-actions">
+          {u.isActive && (
+            <button type="button" className="secondary" onClick={() => deactivateUser(u._id)}>
+              Ապաակտիվացնել
+            </button>
+          )}
+          <button type="button" className="danger" onClick={() => deleteUser(u)}>
+            Ջնջել
           </button>
-        )}
+        </div>
       </td>
     </tr>
   );

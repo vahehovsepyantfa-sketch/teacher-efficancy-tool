@@ -147,6 +147,23 @@ button.secondary {
 }
 button.secondary:hover { background: #dcedfd; }
 
+button.danger {
+  background: #fdeceb;
+  color: #b42318;
+  border: 1px solid #f3c4c0;
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+button.danger:hover { background: #fbd9d6; }
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 0.55rem; border-bottom: 1px solid var(--color-border); font-size: 0.9rem; }
 th { color: var(--color-text-muted); font-weight: 600; }

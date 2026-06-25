@@ -105,4 +105,37 @@ const deactivateUser = async (req, res) => {
   res.json({ user: user.toSafeObject() });
 };
 
-module.exports = { listUsers, createUser, updateUser, deactivateUser };
+/**
+ * DELETE /api/admin/users/:id/permanent
+ * Hard delete: actually removes the account. Refuses to delete the
+ * last remaining admin (to avoid locking everyone out of the panel).
+ * If the deleted user was an LDM, any teachers assigned to them are
+ * unassigned first so they don't keep a dangling reference.
+ */
+const deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ message: 'Cannot delete the last remaining admin account' });
+      }
+    }
+
+    if (user.role === 'ldm') {
+      await User.updateMany({ assignedLdm: user._id }, { assignedLdm: null });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete user', error: err.message });
+  }
+};
+
+module.exports = { listUsers, createUser, updateUser, deactivateUser, deleteUser };
