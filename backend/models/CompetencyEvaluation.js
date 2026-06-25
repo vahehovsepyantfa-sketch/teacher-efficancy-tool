@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 const competencyEntrySchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, maxlength: 200 },
     // Official spec scale: 0-5 (0 = Լիովին բացակայում է … 5 = Լիովին ապահովված է).
     // Optional/null: a competency can carry notes (e.g. pushed in from the
     // manifestation chat) before it has ever been scored.
     score: { type: Number, default: null, min: 0, max: 5 },
-    notes: { type: String, default: '', trim: true },
+    notes: { type: String, default: '', trim: true, maxlength: 3000 },
   },
   { _id: false }
 );
@@ -15,7 +15,7 @@ const competencyEntrySchema = new mongoose.Schema(
 const categoryAverageSchema = new mongoose.Schema(
   {
     key: { type: String, required: true },
-    name: { type: String, required: true },
+    name: { type: String, required: true, maxlength: 200 },
     average: { type: Number, default: null },
   },
   { _id: false }
@@ -34,7 +34,7 @@ const competencyEvaluationSchema = new mongoose.Schema(
       required: true,
     },
     // Free-text evaluation period label, e.g. "2026 Term 1".
-    period: { type: String, required: true, trim: true },
+    period: { type: String, required: true, trim: true, maxlength: 100 },
     competencies: {
       type: [competencyEntrySchema],
       validate: {

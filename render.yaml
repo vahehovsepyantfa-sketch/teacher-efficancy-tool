@@ -17,6 +17,11 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.0-flash
+      # Security fix (M-08): comma-separated allowlist of origins permitted
+      # to call this API. Update this if the frontend's real production
+      # URL differs from the default baked into backend/server.js.
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://teacher-efficancy-tool-1.onrender.com,https://teacher-efficancy-tool-frontend.onrender.com
 
   - type: web
     name: teacher-efficancy-tool-frontend
@@ -31,3 +36,26 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    # Security fixes (M-03–M-07, M-10): the HTML page itself is served
+    # from this static site, so the browser-facing security headers need
+    # to live here too (the API's helmet config only covers its own JSON
+    # responses).
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-XSS-Protection
+        value: "1; mode=block"
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), interest-cohort=()
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://teacher-efficancy-tool-api.onrender.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"

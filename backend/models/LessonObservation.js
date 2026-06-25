@@ -9,15 +9,15 @@ const {
 /** Module 2 section Դ: the coaching / analytical conversation. */
 const coachingSchema = new mongoose.Schema(
   {
-    feltAtStart: { type: String, default: '', trim: true },
-    selfReflectionSummary: { type: String, default: '', trim: true },
-    strengthsObserved: { type: String, default: '', trim: true },
-    improvementsObserved: { type: String, default: '', trim: true },
-    questionsForTeacher: { type: String, default: '', trim: true },
-    practicalWorkPlan: { type: String, default: '', trim: true },
-    feltAtEnd: { type: String, default: '', trim: true },
+    feltAtStart: { type: String, default: '', trim: true, maxlength: 5000 },
+    selfReflectionSummary: { type: String, default: '', trim: true, maxlength: 8000 },
+    strengthsObserved: { type: String, default: '', trim: true, maxlength: 8000 },
+    improvementsObserved: { type: String, default: '', trim: true, maxlength: 8000 },
+    questionsForTeacher: { type: String, default: '', trim: true, maxlength: 8000 },
+    practicalWorkPlan: { type: String, default: '', trim: true, maxlength: 8000 },
+    feltAtEnd: { type: String, default: '', trim: true, maxlength: 5000 },
     goals: { type: [goalStepSchema], default: () => [{}, {}, {}] },
-    resourcesAndGuidance: { type: String, default: '', trim: true },
+    resourcesAndGuidance: { type: String, default: '', trim: true, maxlength: 5000 },
   },
   { _id: false }
 );
@@ -27,12 +27,12 @@ const lessonObservationSchema = new mongoose.Schema(
     ldm: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     date: { type: Date, default: Date.now },
-    subject: { type: String, trim: true, default: '' },
-    grade: { type: String, trim: true, default: '' },
+    subject: { type: String, trim: true, default: '', maxlength: 300 },
+    grade: { type: String, trim: true, default: '', maxlength: 50 },
     // Links the teacher shared on their reflection (spec Module 1), shown
     // here read-only so the specialist can open them while scoring.
-    lessonPlanLink: { type: String, trim: true, default: '' },
-    recordingLink: { type: String, trim: true, default: '' },
+    lessonPlanLink: { type: String, trim: true, default: '', maxlength: 2000 },
+    recordingLink: { type: String, trim: true, default: '', maxlength: 2000 },
 
     // Ա. Դասապլանի և դասի պլանավորման ընդհանուր ակնկալիքներ
     planningRubric: { type: planningRubricSchema, default: () => ({}) },
@@ -56,9 +56,9 @@ const lessonObservationSchema = new mongoose.Schema(
     grandAverage: { type: Number, default: null },
 
     // Legacy free-text fields, kept for the older simplified form/PDF.
-    strengths: { type: String, trim: true, default: '' },
-    areasForGrowth: { type: String, trim: true, default: '' },
-    recommendations: { type: String, trim: true, default: '' },
+    strengths: { type: String, trim: true, default: '', maxlength: 8000 },
+    areasForGrowth: { type: String, trim: true, default: '', maxlength: 8000 },
+    recommendations: { type: String, trim: true, default: '', maxlength: 8000 },
 
     // Per spec page 6: the LDM fills this privately, then clicks "Ուղարկել"
     // to publish it into the teacher's "Իմ դասի վերլուծություն" section.

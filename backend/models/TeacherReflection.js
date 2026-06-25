@@ -11,17 +11,17 @@ const teacherReflectionSchema = new mongoose.Schema(
     date: { type: Date, default: Date.now },
 
     // --- Header / lesson identification (spec Module 1 field table) ---
-    academicYear: { type: String, trim: true, default: '' },
-    subject: { type: String, trim: true, default: '' },
-    topic: { type: String, trim: true, default: '' },
-    grade: { type: String, trim: true, default: '' },
+    academicYear: { type: String, trim: true, default: '', maxlength: 50 },
+    subject: { type: String, trim: true, default: '', maxlength: 300 },
+    topic: { type: String, trim: true, default: '', maxlength: 300 },
+    grade: { type: String, trim: true, default: '', maxlength: 50 },
     studentsCount: { type: Number, default: null },
-    lessonPlanLink: { type: String, trim: true, default: '' },
-    recordingLink: { type: String, trim: true, default: '' },
+    lessonPlanLink: { type: String, trim: true, default: '', maxlength: 2000 },
+    recordingLink: { type: String, trim: true, default: '', maxlength: 2000 },
 
     // --- Pre-discussion reflection prompts (Rich Text + Voice-to-Text) ---
-    successfulDirections: { type: String, trim: true, default: '' },
-    previousGoalsProgress: { type: String, trim: true, default: '' },
+    successfulDirections: { type: String, trim: true, default: '', maxlength: 8000 },
+    previousGoalsProgress: { type: String, trim: true, default: '', maxlength: 8000 },
 
     // --- "ՈՒԱ լրացման դաշտեր": teacher's self-rating using the shared
     // teaching-expectations rubric (same rubric the LDM independently
@@ -35,7 +35,7 @@ const teacherReflectionSchema = new mongoose.Schema(
 
     // Free-text field kept for backwards compatibility / quick capture;
     // mirrors the legacy "content" field.
-    content: { type: String, trim: true, default: '' },
+    content: { type: String, trim: true, default: '', maxlength: 8000 },
 
     inputMethod: {
       type: String,
